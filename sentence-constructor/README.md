@@ -1,0 +1,1 @@
+## Folder containing the prompt engineering documentation for the sentence constructor project 
