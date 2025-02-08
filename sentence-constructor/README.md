@@ -16,6 +16,6 @@
 
 We need to find a way to evaluate the quality of the generated sentences. In this process we need to find the best way to engineer the prompting. Because of the zero cost restriction we are only able to use free services to achieve this.The following diagram shows the evaluation process for the sentence constructor Proof of concept.
 
-![Flow chart diagramm of the evaluation process for the sentence constructor Proof of concept. ](images/poc-eval-process.png)
+![Flow chart diagramm of the evaluation process for the sentence constructor Proof of concept.](images/process-1.png)
 
 At the end of this process we will have a prompt engineered baseline that will work on a wide variety of AI powered assistants and chatbots. We then have a certain level of confidence that we can use this baseline to build a proof of concept for a production ready system.
