@@ -11,6 +11,8 @@
 >- Let the student try to build the sentence on his own
 >- Provide the words in their dictionary form, students need to figure out conjugation, tenses and declension
 >- Provide a possible sentence structure
+>- Do classify the Student input into The Common European Framework of Reference for Languages (CEFR) 
+>- If the Student input is above A1 or A2 of CEFR, provide an alternative sentence matching A1 or A2
 
 >***Student input: Bears are at the door, did you leave the garbage out?***
 
