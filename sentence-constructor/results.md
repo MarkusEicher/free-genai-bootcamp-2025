@@ -1,3 +1,5 @@
+>***The content of this file is shown according to the commits for the prompts. You can view previous stages by using the diff function.***
+
 #### Result after 3. iteration:
 
 ##### Prompt:
