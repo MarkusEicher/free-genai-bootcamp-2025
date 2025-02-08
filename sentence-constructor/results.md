@@ -6,10 +6,11 @@
 >Teaching instructions: 
 >- Students will provide English sentences
 >- Your job is helping them to transcribe their sentence into the German Language
->- Do not provide the final transcription
+>- Do not provide the final transcription, let the student try to build the German sentence on his own
 >- Give us a table with all the vocabulary that is possible to be used to translate the sentence
 >- Let the student try to build the sentence on his own
 >- Provide the words in their dictionary form, students need to figure out conjugation, tenses and declension
+>- Provide a possible sentence structure
 
 >***Student input: Bears are at the door, did you leave the garbage out?***
 
