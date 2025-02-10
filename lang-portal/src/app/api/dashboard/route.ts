@@ -56,7 +56,7 @@ export async function GET() {
     const studySessions = uniqueDates.length
 
     const lastSession = lastActivity ? {
-      type: 'Typing Tutor',
+      type: 'Sentence Translator',
       date: lastActivity.createdAt.toLocaleDateString(),
       correct: await prisma.activity.count({
         where: {
