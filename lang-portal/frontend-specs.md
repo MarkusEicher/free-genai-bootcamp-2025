@@ -23,6 +23,11 @@
     - Study Sessions Count
     - Active Groups Count
     - Study Streak
+## Dashboard Endpoints
+GET /api/dashboard/stats
+GET /api/dashboard/progress
+GET /api/dashboard/latest-session
+
 
 ### Study Activities (/study-activities)
 - Header
@@ -32,6 +37,12 @@
   - Multiple Choice Card
   - Flashcards Card
   - (Other activity types)
+## Study Activities Endpoints
+GET /api/activities/list
+GET /api/activities/start/{activityId}
+POST /api/activities/complete
+GET /api/activities/progress/{activityId}
+
 
 ### Words (/words)
 - Header
@@ -43,6 +54,14 @@
     - Translation
     - Edit/Delete Actions
 - Search/Filter Controls
+## Words Endpoints
+GET /api/words/list
+POST /api/words/create
+PUT /api/words/{wordId}
+DELETE /api/words/{wordId}
+GET /api/words/search
+GET /api/words/{wordId}
+
 
 ### Word Groups (/word-groups)
 - Header
@@ -55,6 +74,16 @@
     - Progress Indicator
     - Edit/Delete Actions
 - Search/Filter Controls
+## Word Groups Endpoints
+GET /api/groups/list
+POST /api/groups/create
+PUT /api/groups/{groupId}
+DELETE /api/groups/{groupId}
+GET /api/groups/{groupId}/words
+POST /api/groups/{groupId}/words
+DELETE /api/groups/{groupId}/words/{wordId}
+GET /api/groups/search
+
 
 ### Sessions (/sessions)
 - Header
@@ -66,6 +95,12 @@
     - Performance Stats
     - Duration
 - Filter/Sort Controls
+## Sessions Endpoints
+GET /api/sessions/list
+GET /api/sessions/{sessionId}
+GET /api/sessions/filter
+DELETE /api/sessions/{sessionId}
+
 
 ### Settings (/settings)
 - Theme Selector
@@ -73,6 +108,11 @@
 - Reset History Button
 - Other Configuration Options
   - (Expandable based on requirements)
+## Settings Endpoints
+GET /api/settings
+PUT /api/settings/theme
+POST /api/settings/reset-history
+
 
 ## Shared Components
 - Navigation Sidebar
