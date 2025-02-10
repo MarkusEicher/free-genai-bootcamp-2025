@@ -2,78 +2,78 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import type { Activity } from '@prisma/client'
 
 interface DashboardStats {
-  totalWords: number
-  successRate: number
-  studySessions: number
-  activeGroups: number
-  studyStreak: number
-  lastSession?: {
+  lastSession: {
     type: string
     date: string
     correct: number
     wrong: number
     groupId?: string
+    groupName?: string
+  } | null
+  studyProgress: {
+    totalWords: number
+    studiedWords: number
+    masteryProgress: number
+  }
+  quickStats: {
+    successRate: number
+    studySessions: number
+    activeGroups: number
+    studyStreak: number
   }
 }
 
-export default function Home() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
+const initialStats: DashboardStats = {
+  lastSession: null,
+  studyProgress: {
+    totalWords: 0,
+    studiedWords: 0,
+    masteryProgress: 0
+  },
+  quickStats: {
+    successRate: 0,
+    studySessions: 0,
+    activeGroups: 0,
+    studyStreak: 0
+  }
+}
+
+export default function HomePage() {
+  const [stats, setStats] = useState<DashboardStats>(initialStats)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchDashboardStats()
+    fetchStats()
   }, [])
 
-  const fetchDashboardStats = async () => {
+  const fetchStats = async () => {
     try {
-      setIsLoading(true)
-      const response = await fetch('/api/stats')
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats')
-      }
+      const response = await fetch('/api/dashboard')
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch stats')
       setStats(data.data)
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-      setError('Failed to load dashboard stats')
+    } catch (err) {
+      console.error('Error fetching stats:', err)
+      setError('Failed to load stats')
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-4">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-4 rounded-lg shadow h-48"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-4">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <div className="p-4">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">{error}</div>
 
   return (
     <div className="p-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Link 
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+        </div>
+        <Link
           href="/activities"
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
         >
@@ -83,67 +83,83 @@ export default function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Last Study Session */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-3">Last Study Session</h2>
-          {stats?.lastSession ? (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="flex items-center gap-2 text-lg font-medium mb-4">
+            <span className="text-gray-400">⏱</span>
+            Last Study Session
+          </h2>
+          {stats.lastSession ? (
             <>
-              <p className="text-gray-600 dark:text-gray-300">{stats.lastSession.type}</p>
-              <p className="text-gray-600 dark:text-gray-300">
-                {new Date(stats.lastSession.date).toLocaleDateString()}
-              </p>
-              <div className="mt-2">
-                <span className="text-green-500">✓ {stats.lastSession.correct} correct</span>
-                <span className="text-red-500 ml-3">✗ {stats.lastSession.wrong} wrong</span>
+              <div className="mb-4">
+                <div className="flex justify-between mb-2">
+                  <div>{stats.lastSession.type}</div>
+                  <div className="text-gray-500">{stats.lastSession.date}</div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="text-green-500">✓ {stats.lastSession.correct} correct</div>
+                  <div className="text-red-500">✗ {stats.lastSession.wrong} wrong</div>
+                </div>
               </div>
               {stats.lastSession.groupId && (
-                <Link href={`/groups/${stats.lastSession.groupId}`} className="text-blue-500 text-sm hover:underline">
+                <Link
+                  href={`/groups/${stats.lastSession.groupId}`}
+                  className="text-blue-500 hover:text-blue-600 text-sm"
+                >
                   View Group →
                 </Link>
               )}
             </>
           ) : (
-            <p className="text-gray-500">No sessions yet</p>
+            <div className="text-gray-500">No sessions yet</div>
           )}
         </div>
 
         {/* Study Progress */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-3">Study Progress</h2>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="flex items-center gap-2 text-lg font-medium mb-4">
+            <span className="text-gray-400">📈</span>
+            Study Progress
+          </h2>
           <div className="mb-4">
-            <p className="text-gray-600 dark:text-gray-300">Total Words Studied</p>
-            <p className="text-2xl font-bold">{stats?.totalWords || 0}</p>
+            <div className="text-2xl font-bold mb-2">
+              {stats.studyProgress.studiedWords} / {stats.studyProgress.totalWords}
+            </div>
+            <div className="text-sm text-gray-500 mb-2">Total Words Studied</div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-500 h-2 rounded-full"
+                style={{ width: `${stats.studyProgress.masteryProgress}%` }}
+              />
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              Mastery Progress {stats.studyProgress.masteryProgress}%
+            </div>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-            <div 
-              className="bg-blue-500 h-2.5 rounded-full" 
-              style={{ width: `${Math.min((stats?.totalWords || 0) / 100 * 100, 100)}%` }}
-            ></div>
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Progress: {Math.min(Math.round((stats?.totalWords || 0) / 100 * 100), 100)}%
-          </p>
         </div>
 
         {/* Quick Stats */}
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-3">Quick Stats</h2>
-          <div className="space-y-2">
-            <p className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Success Rate</span>
-              <span className="font-medium">{stats?.successRate || 0}%</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Study Sessions</span>
-              <span className="font-medium">{stats?.studySessions || 0}</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Active Groups</span>
-              <span className="font-medium">{stats?.activeGroups || 0}</span>
-            </p>
-            <p className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-300">Study Streak</span>
-              <span className="font-medium">{stats?.studyStreak || 0} days</span>
-            </p>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="flex items-center gap-2 text-lg font-medium mb-4">
+            <span className="text-gray-400">🏆</span>
+            Quick Stats
+          </h2>
+          <div className="space-y-4">
+            <div className="flex justify-between">
+              <div className="text-gray-500">Success Rate</div>
+              <div className="font-medium">{stats.quickStats.successRate}%</div>
+            </div>
+            <div className="flex justify-between">
+              <div className="text-gray-500">Study Sessions</div>
+              <div className="font-medium">{stats.quickStats.studySessions}</div>
+            </div>
+            <div className="flex justify-between">
+              <div className="text-gray-500">Active Groups</div>
+              <div className="font-medium">{stats.quickStats.activeGroups}</div>
+            </div>
+            <div className="flex justify-between">
+              <div className="text-gray-500">Study Streak</div>
+              <div className="font-medium">{stats.quickStats.studyStreak} days</div>
+            </div>
           </div>
         </div>
       </div>

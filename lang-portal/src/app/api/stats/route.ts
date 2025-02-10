@@ -3,35 +3,95 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
-    // Basic stats with minimal queries
-    const totalWords = await prisma.word.count()
+    // Get all required data in parallel
+    const [totalWords, activities, activeGroups] = await Promise.all([
+      prisma.word.count(),
+      prisma.activity.findMany({
+        orderBy: {
+          createdAt: 'desc'
+        },
+        include: {
+          word: {
+            include: {
+              group: true
+            }
+          }
+        }
+      }),
+      prisma.group.count({
+        where: {
+          words: {
+            some: {} // Only count groups that have words
+          }
+        }
+      })
+    ])
+
+    // Calculate success rate
+    const successRate = activities.length > 0
+      ? Math.round((activities.filter(a => a.success).length / activities.length) * 100)
+      : 0
+
+    // Calculate unique study sessions (by date)
+    const uniqueDates = new Set(
+      activities.map(a => 
+        new Date(a.createdAt).toISOString().split('T')[0]
+      )
+    )
+    const studySessions = uniqueDates.size
+
+    // Get last session details
+    const lastActivity = activities[0]
+    const lastSessionDate = lastActivity ? new Date(lastActivity.createdAt) : null
+    const lastSessionActivities = lastSessionDate
+      ? activities.filter(a => 
+          new Date(a.createdAt).toISOString().split('T')[0] === 
+          lastSessionDate.toISOString().split('T')[0]
+        )
+      : []
+
+    const lastSession = lastActivity ? {
+      type: lastActivity.type,
+      date: lastActivity.createdAt.toISOString(),
+      correct: lastSessionActivities.filter(a => a.success).length,
+      wrong: lastSessionActivities.filter(a => !a.success).length,
+      groupId: lastActivity.word.groupId
+    } : undefined
+
+    // Calculate study streak
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
     
-    // Return simplified stats first to test
+    const sessionDates = [...uniqueDates].sort().reverse()
+    let studyStreak = 0
+    
+    for (let i = 0; i < sessionDates.length; i++) {
+      const expectedDate = new Date(today)
+      expectedDate.setDate(today.getDate() - i)
+      const expectedDateStr = expectedDate.toISOString().split('T')[0]
+      
+      if (sessionDates[i] === expectedDateStr) {
+        studyStreak++
+      } else {
+        break
+      }
+    }
+
     return NextResponse.json({
       data: {
         totalWords,
-        successRate: 0,
-        studySessions: 0,
-        activeGroups: 0,
-        studyStreak: 0,
-        lastSession: null
+        successRate,
+        studySessions,
+        activeGroups,
+        studyStreak,
+        lastSession
       }
     })
-
   } catch (error) {
-    // Log the full error details
-    console.error('Database Error:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack trace'
-    })
-
+    console.error('Error fetching stats:', error)
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch stats',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Failed to fetch stats' },
       { status: 500 }
     )
   }
-} 
+}

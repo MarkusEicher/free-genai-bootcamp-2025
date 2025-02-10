@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { GroupRepository } from '@/repositories/groupRepository'
-import { GroupSchema } from '@/utils/validation'
+import { GroupSchema } from '@/lib/schemas/group'
+import { GroupRepository } from '@/lib/repositories/group'
 
 export async function GET(
   request: Request,
@@ -16,6 +16,7 @@ export async function GET(
     }
     return NextResponse.json({ data: group })
   } catch (error) {
+    console.error('Error fetching group:', error)
     return NextResponse.json(
       { error: 'Failed to fetch group' },
       { status: 500 }
@@ -33,6 +34,7 @@ export async function PUT(
     const group = await GroupRepository.update(params.id, validated)
     return NextResponse.json({ data: group })
   } catch (error) {
+    console.error('Error updating group:', error)
     return NextResponse.json(
       { error: 'Failed to update group' },
       { status: 400 }
@@ -46,8 +48,9 @@ export async function DELETE(
 ) {
   try {
     await GroupRepository.delete(params.id)
-    return NextResponse.json({ success: true }, { status: 200 })
+    return NextResponse.json({ success: true })
   } catch (error) {
+    console.error('Error deleting group:', error)
     return NextResponse.json(
       { error: 'Failed to delete group' },
       { status: 400 }
