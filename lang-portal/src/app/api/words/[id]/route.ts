@@ -1,24 +1,37 @@
 import { NextResponse } from 'next/server'
-import { WordRepository } from '@/repositories/wordRepository'
-import { WordSchema } from '@/utils/validation'
 import { prisma } from '@/lib/prisma'
+import { WordSchema } from '@/lib/schemas/word'
+import { WordRepository } from '@/lib/repositories/word'
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const word = await WordRepository.findById(params.id)
+    const word = await prisma.word.findUnique({
+      where: { id: params.id },
+      include: {
+        group: true,
+        activities: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+
     if (!word) {
       return NextResponse.json(
         { error: 'Word not found' },
         { status: 404 }
       )
     }
+
     return NextResponse.json({ data: word })
   } catch (error) {
+    console.error('Error fetching word:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch word' },
+      { error: 'Failed to fetch word details' },
       { status: 500 }
     )
   }
@@ -34,6 +47,7 @@ export async function PUT(
     const word = await WordRepository.update(params.id, validated)
     return NextResponse.json({ data: word })
   } catch (error) {
+    console.error('Error updating word:', error)
     return NextResponse.json(
       { error: 'Failed to update word' },
       { status: 400 }
@@ -46,46 +60,13 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.word.delete({
-      where: { id: params.id }
-    })
-
-    return NextResponse.json({ message: 'Word deleted successfully' })
+    await WordRepository.delete(params.id)
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting word:', error)
     return NextResponse.json(
       { error: 'Failed to delete word' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const body = await request.json()
-    const { text, translation, groupId } = body
-
-    const word = await prisma.word.update({
-      where: { id: params.id },
-      data: {
-        text: text,
-        translation: translation,
-        groupId: groupId || null
-      },
-      include: {
-        group: true
-      }
-    })
-
-    return NextResponse.json({ data: word })
-  } catch (error) {
-    console.error('Error updating word:', error)
-    return NextResponse.json(
-      { error: 'Failed to update word' },
-      { status: 500 }
+      { status: 400 }
     )
   }
 } 

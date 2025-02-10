@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import type { Word, Group } from '@prisma/client'
 
 interface WordWithGroup extends Word {
@@ -66,15 +67,24 @@ export default function WordsPage() {
     }
   }
 
-  const updateWord = async (wordId: string, updates: Partial<Word>) => {
+  const updateWord = async (wordId: string, updates: Partial<WordWithGroup>) => {
     try {
       const response = await fetch(`/api/words/${wordId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        body: JSON.stringify({
+          text: updates.text,
+          translation: updates.translation,
+          groupId: updates.groupId
+        })
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update word')
+      }
+
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Failed to update word')
       
       setWords(words.map(word => 
         word.id === wordId 
@@ -84,7 +94,7 @@ export default function WordsPage() {
       setEditingWord(null)
     } catch (err) {
       console.error('Error updating word:', err)
-      setError('Failed to update word')
+      setError(err instanceof Error ? err.message : 'Failed to update word')
     }
   }
 
@@ -95,7 +105,10 @@ export default function WordsPage() {
       const response = await fetch(`/api/words/${wordId}`, {
         method: 'DELETE'
       })
-      if (!response.ok) throw new Error('Failed to delete word')
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to delete word')
+      }
       setWords(words.filter(word => word.id !== wordId))
     } catch (err) {
       console.error('Error deleting word:', err)
@@ -207,7 +220,12 @@ export default function WordsPage() {
               ) : (
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="font-medium">{word.text}</p>
+                    <Link 
+                      href={`/words/${word.id}`}
+                      className="font-medium hover:text-blue-500"
+                    >
+                      {word.text}
+                    </Link>
                     <p className="text-gray-500">{word.translation}</p>
                     <p className="text-sm text-gray-500">
                       {word.group ? `Group: ${word.group.name}` : 'No Group'}
