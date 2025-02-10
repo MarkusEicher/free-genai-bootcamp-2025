@@ -46,3 +46,15 @@ model Activity {
   success   Boolean
   createdAt DateTime @default(now())
 }
+
+model Settings {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @default(cuid()) // For future user support
+  dailyGoal            Int      @default(10)
+  notificationsEnabled Boolean  @default(true)
+  studyReminders       Boolean  @default(true)
+  theme                String   @default("system")
+  language             String   @default("en")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}

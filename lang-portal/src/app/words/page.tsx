@@ -12,6 +12,8 @@ export default function WordsPage() {
   const [words, setWords] = useState<WordWithGroup[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [message, setMessage] = useState('')
+  const [search, setSearch] = useState('')
+  const [selectedGroup, setSelectedGroup] = useState('')
 
   useEffect(() => {
     fetchWords()
@@ -70,6 +72,14 @@ export default function WordsPage() {
       console.error('Error:', error)
     }
   }
+
+  const filteredWords = words.filter(word => {
+    const matchesSearch = search === '' || 
+      word.text.toLowerCase().includes(search.toLowerCase()) ||
+      word.translation.toLowerCase().includes(search.toLowerCase())
+    const matchesGroup = selectedGroup === '' || word.groupId === selectedGroup
+    return matchesSearch && matchesGroup
+  })
 
   return (
     <div className="p-4">
@@ -130,11 +140,34 @@ export default function WordsPage() {
         <p className="my-4 text-green-600">{message}</p>
       )}
 
+      {/* Search and Filter */}
+      <div className="mb-6 space-y-4">
+        <input
+          type="text"
+          placeholder="Search words..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border p-2 w-full rounded"
+        />
+        <select
+          value={selectedGroup}
+          onChange={(e) => setSelectedGroup(e.target.value)}
+          className="border p-2 w-full rounded"
+        >
+          <option value="">All Groups</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Words List */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">Existing Words</h2>
         <div className="space-y-4">
-          {words.map((word) => (
+          {filteredWords.map((word) => (
             <div
               key={word.id}
               className="border p-4 rounded shadow flex justify-between items-center"

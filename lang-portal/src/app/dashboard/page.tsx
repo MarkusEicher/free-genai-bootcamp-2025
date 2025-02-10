@@ -18,52 +18,21 @@ interface DashboardStats {
   }
 }
 
-export default function Home() {
+export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setIsLoading(true)
-        const response = await fetch('/api/dashboard/stats')
-        const data = await response.json()
-        setStats(data.data)
-      } catch (err) {
-        setError('Failed to load dashboard stats')
-        console.error('Error fetching dashboard stats:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchStats()
+    fetchDashboardStats()
   }, [])
 
-  if (isLoading) {
-    return (
-      <div className="p-4">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-4 rounded-lg shadow h-48"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-4">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      </div>
-    )
+  const fetchDashboardStats = async () => {
+    try {
+      const response = await fetch('/api/dashboard/stats')
+      const data = await response.json()
+      setStats(data.data)
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+    }
   }
 
   return (
@@ -85,9 +54,7 @@ export default function Home() {
           {stats?.lastSession ? (
             <>
               <p className="text-gray-600">{stats.lastSession.type}</p>
-              <p className="text-gray-600">
-                {new Date(stats.lastSession.date).toLocaleDateString()}
-              </p>
+              <p className="text-gray-600">{stats.lastSession.date}</p>
               <div className="mt-2">
                 <span className="text-green-500">✓ {stats.lastSession.correct} correct</span>
                 <span className="text-red-500 ml-3">✗ {stats.lastSession.wrong} wrong</span>
@@ -113,7 +80,7 @@ export default function Home() {
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <div 
               className="bg-blue-500 h-2.5 rounded-full" 
-              style={{ width: `${((stats?.totalWords || 0) / 124) * 100}%` }}
+              style={{ width: `${(stats?.totalWords || 0) / 124 * 100}%` }}
             ></div>
           </div>
           <p className="text-sm text-gray-500 mt-2">Mastery Progress: 0%</p>
@@ -144,4 +111,4 @@ export default function Home() {
       </div>
     </div>
   )
-}
+} 

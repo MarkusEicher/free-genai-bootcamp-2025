@@ -24,10 +24,14 @@ export default function ActivitiesPage() {
   const [currentWord, setCurrentWord] = useState<WordWithGroup | null>(null)
   const [answer, setAnswer] = useState('')
   const [message, setMessage] = useState('')
+  const [streak, setStreak] = useState(0)
+  const [todayProgress, setTodayProgress] = useState({ total: 0, correct: 0 })
 
   useEffect(() => {
     fetchWords()
     fetchStats()
+    fetchStreak()
+    fetchTodayProgress()
   }, [])
 
   const fetchWords = async () => {
@@ -48,6 +52,18 @@ export default function ActivitiesPage() {
     } catch (error) {
       console.error('Error fetching stats:', error)
     }
+  }
+
+  const fetchStreak = async () => {
+    const response = await fetch('/api/activities/streak')
+    const data = await response.json()
+    setStreak(data.streak)
+  }
+
+  const fetchTodayProgress = async () => {
+    const response = await fetch('/api/activities/today')
+    const data = await response.json()
+    setTodayProgress(data.progress)
   }
 
   const startPractice = () => {
@@ -111,6 +127,19 @@ export default function ActivitiesPage() {
           <p>Success Rate: {stats.successRate.toFixed(1)}%</p>
         </div>
       )}
+
+      {/* Progress Section */}
+      <div className="mb-8 grid grid-cols-2 gap-4">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-semibold mb-2">Study Streak</h3>
+          <p className="text-2xl">�� {streak} days</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-semibold mb-2">Today's Progress</h3>
+          <p>Words: {todayProgress.total}</p>
+          <p>Correct: {todayProgress.correct}</p>
+        </div>
+      </div>
 
       {/* Practice Section */}
       <div className="mb-8">
