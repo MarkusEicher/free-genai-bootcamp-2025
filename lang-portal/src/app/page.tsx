@@ -42,7 +42,7 @@ const initialStats: DashboardStats = {
 }
 
 export default function HomePage() {
-  const [stats, setStats] = useState<DashboardStats>(initialStats)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,12 +53,18 @@ export default function HomePage() {
   const fetchStats = async () => {
     try {
       const response = await fetch('/api/dashboard')
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new TypeError("Response was not JSON")
+      }
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch stats')
       setStats(data.data)
     } catch (err) {
       console.error('Error fetching stats:', err)
-      setError('Failed to load stats')
+      setError('Failed to load dashboard stats')
     } finally {
       setIsLoading(false)
     }
@@ -66,6 +72,7 @@ export default function HomePage() {
 
   if (isLoading) return <div className="p-4">Loading...</div>
   if (error) return <div className="p-4 text-red-500">{error}</div>
+  if (!stats) return <div className="p-4">No stats available</div>
 
   return (
     <div className="p-4">

@@ -62,7 +62,7 @@ export async function GET() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     
-    const sessionDates = [...uniqueDates].sort().reverse()
+    const sessionDates = Array.from(uniqueDates).sort().reverse()
     let studyStreak = 0
     
     for (let i = 0; i < sessionDates.length; i++) {

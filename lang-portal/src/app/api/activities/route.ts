@@ -1,27 +1,47 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Activity, Word, Group } from '@prisma/client'
+
+type ActivityWithRelations = Activity & {
+  word: (Word & {
+    group: Group | null
+  }) | null
+}
 
 export async function GET() {
   try {
     const activities = await prisma.activity.findMany({
+      take: 50,
+      orderBy: { createdAt: 'desc' },
       include: {
         word: {
           include: {
             group: true
           }
         }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: 50 // Limit to last 50 activities
+      }
     })
 
-    return NextResponse.json({ data: activities })
+    const safeActivities = activities.map((activity: ActivityWithRelations) => ({
+      id: activity.id,
+      type: activity.type,
+      wordId: activity.wordId,
+      success: activity.success,
+      createdAt: activity.createdAt.toISOString(),
+      word: activity.word ? {
+        text: activity.word.text,
+        translation: activity.word.translation,
+        group: activity.word.group ? {
+          name: activity.word.group.name
+        } : null
+      } : null
+    }))
+
+    return NextResponse.json({ data: safeActivities })
   } catch (error) {
-    console.error('Error fetching activities:', error)
+    console.error('Error in /api/activities:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch activities' },
+      { error: 'Internal Server Error' },
       { status: 500 }
     )
   }

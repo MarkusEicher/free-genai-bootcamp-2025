@@ -5,12 +5,12 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -23,26 +23,26 @@ model Word {
   id          String     @id @default(cuid())
   text        String
   translation String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
   groupId     String?
   group       Group?     @relation(fields: [groupId], references: [id])
   activities  Activity[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model Group {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
+  words     Word[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  words     Word[]
 }
 
 model Activity {
   id        String   @id @default(cuid())
+  type      String   @default("study")
   wordId    String
   word      Word     @relation(fields: [wordId], references: [id])
-  type      String   @default("practice")
   success   Boolean
   createdAt DateTime @default(now())
 }

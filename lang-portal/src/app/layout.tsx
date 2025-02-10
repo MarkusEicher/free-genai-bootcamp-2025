@@ -3,6 +3,15 @@ import { ThemeProvider } from 'next-themes'
 import Link from 'next/link'
 import './globals.css'
 
+const navItems = [
+  { href: '/', label: 'Dashboard', icon: '📊' },
+  { href: '/groups', label: 'Word Groups', icon: '📑' },
+  { href: '/words', label: 'Words', icon: '📝' },
+  { href: '/study', label: 'Study Activities', icon: '📚' },
+  { href: '/sessions', label: 'Sessions', icon: '⏱️' },
+  { href: '/settings', label: 'Settings', icon: '⚙️' },
+]
+
 export const metadata: Metadata = {
   title: 'LangPortal',
   description: 'Language Learning Portal',
@@ -21,36 +30,16 @@ export default function RootLayout({
             {/* Sidebar Navigation */}
             <nav className="w-64 bg-gray-50 dark:bg-gray-800 p-4 space-y-2">
               <h1 className="text-xl font-bold mb-6 dark:text-white">LangPortal</h1>
-              <Link 
-                href="/" 
-                className="block p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded dark:text-gray-200"
-              >
-                Home
-              </Link>
-              <Link 
-                href="/activities" 
-                className="block p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded dark:text-gray-200"
-              >
-                Study Activities
-              </Link>
-              <Link 
-                href="/words" 
-                className="block p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded dark:text-gray-200"
-              >
-                Words
-              </Link>
-              <Link 
-                href="/sessions" 
-                className="block p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded dark:text-gray-200"
-              >
-                Sessions
-              </Link>
-              <Link 
-                href="/settings" 
-                className="block p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded dark:text-gray-200"
-              >
-                Settings
-              </Link>
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 dark:text-gray-200"
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </Link>
+              ))}
             </nav>
 
             {/* Main Content */}
