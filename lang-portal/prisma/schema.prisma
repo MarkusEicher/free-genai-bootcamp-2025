@@ -20,13 +20,14 @@ model User {
 }
 
 model Word {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   text        String
   translation String
   groupId     String?
-  group       Group?   @relation(fields: [groupId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  group       Group?     @relation(fields: [groupId], references: [id])
+  activities  Activity[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model Group {
@@ -35,4 +36,13 @@ model Group {
   words     Word[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String
+  wordId    String
+  word      Word     @relation(fields: [wordId], references: [id])
+  success   Boolean
+  createdAt DateTime @default(now())
 }

@@ -1,56 +1,43 @@
 import { prisma } from '@/lib/prisma'
-import type { Word, Group } from '@prisma/client'
+import type { Word } from '@prisma/client'
 import type { WordInput } from '@/utils/validation'
-
-// Define a type that includes the relations
-type WordWithGroup = Word & {
-  group: Group | null
-}
 
 export class WordRepository {
   static async findMany(params: {
     skip?: number
     take?: number
     search?: string
-  }): Promise<WordWithGroup[]> {
+  }): Promise<Word[]> {
     return prisma.word.findMany({
       where: {
         text: params.search ? {
           contains: params.search,
         } : undefined,
       },
-      skip: params.skip,
-      take: params.take,
       include: {
         group: true,
       },
+      skip: params.skip,
+      take: params.take,
       orderBy: {
         createdAt: 'desc',
       },
     })
   }
 
-  static async create(data: Omit<WordInput, 'id'>): Promise<WordWithGroup> {
+  static async create(data: WordInput): Promise<Word> {
     return prisma.word.create({
-      data: {
-        text: data.text,
-        translation: data.translation,
-        groupId: data.groupId || null,
-      },
+      data,
       include: {
         group: true,
       },
     })
   }
 
-  static async update(id: string, data: WordInput): Promise<WordWithGroup> {
+  static async update(id: string, data: WordInput): Promise<Word> {
     return prisma.word.update({
       where: { id },
-      data: {
-        text: data.text,
-        translation: data.translation,
-        groupId: data.groupId || null,
-      },
+      data,
       include: {
         group: true,
       },
@@ -60,10 +47,13 @@ export class WordRepository {
   static async delete(id: string): Promise<Word> {
     return prisma.word.delete({
       where: { id },
+      include: {
+        group: true,
+      },
     })
   }
 
-  static async findById(id: string): Promise<WordWithGroup | null> {
+  static async findById(id: string): Promise<Word | null> {
     return prisma.word.findUnique({
       where: { id },
       include: {
