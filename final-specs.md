@@ -9,6 +9,8 @@
 - Styled Components & Tailwind CSS
 - TypeScript
 - Jest & React Testing Library
+- There will no authentication or authorization
+Everything be treated as a single user
 
 ### Backend
 - Next.js 14+ (App Router)
