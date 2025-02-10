@@ -13,20 +13,21 @@ interface Group {
 
 interface Word {
   id: string
-  text: string
-  translation: string
+  text: string        // German
+  translation: string // English
 }
 
 export default function FlashcardsLaunchPage() {
   const router = useRouter()
   const [groups, setGroups] = useState<Group[]>([])
   const [selectedGroup, setSelectedGroup] = useState<string>('')
+  const [words, setWords] = useState<Word[]>([])
   const [currentWord, setCurrentWord] = useState<Word | null>(null)
   const [userInput, setUserInput] = useState('')
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isStudyStarted, setIsStudyStarted] = useState(false)
-  const [words, setWords] = useState<Word[]>([])
+  const [remainingWords, setRemainingWords] = useState<Word[]>([])
 
   useEffect(() => {
     fetchGroups()
@@ -51,21 +52,27 @@ export default function FlashcardsLaunchPage() {
       const response = await fetch(`/api/groups/${selectedGroup}/words`)
       if (!response.ok) throw new Error('Failed to fetch words')
       const data = await response.json()
-      setWords(data.data)
+      const fetchedWords = data.data
+      setWords(fetchedWords)
+      setRemainingWords([...fetchedWords])
       setIsStudyStarted(true)
-      nextWord()
+      nextWord([...fetchedWords])
     } catch (error) {
       console.error('Error:', error)
     }
   }
 
-  const nextWord = () => {
-    if (words.length === 0) {
+  const nextWord = (wordList: Word[] = remainingWords) => {
+    if (wordList.length === 0) {
       setCurrentWord(null)
       return
     }
-    const randomIndex = Math.floor(Math.random() * words.length)
-    setCurrentWord(words[randomIndex])
+    const randomIndex = Math.floor(Math.random() * wordList.length)
+    const selectedWord = wordList[randomIndex]
+    const updatedWords = wordList.filter((_, index) => index !== randomIndex)
+    
+    setCurrentWord(selectedWord)
+    setRemainingWords(updatedWords)
     setUserInput('')
     setFeedback(null)
   }
@@ -94,7 +101,15 @@ export default function FlashcardsLaunchPage() {
     }
 
     // Wait a moment before showing next word
-    setTimeout(nextWord, 1500)
+    setTimeout(() => {
+      if (remainingWords.length === 0) {
+        // If all words have been studied, reset the list
+        setRemainingWords([...words])
+        nextWord([...words])
+      } else {
+        nextWord()
+      }
+    }, 1500)
   }
 
   if (isLoading) return <div className="p-6">Loading...</div>
@@ -170,16 +185,13 @@ export default function FlashcardsLaunchPage() {
               {feedback === 'correct' ? 'Correct!' : `Incorrect. The answer was: ${currentWord.text}`}
             </div>
           )}
+          <div className="text-center mt-4 text-gray-400">
+            Remaining words: {remainingWords.length} / {words.length}
+          </div>
         </div>
       ) : (
         <div className="text-center">
-          <p className="text-xl mb-4">No more words to study!</p>
-          <button
-            onClick={() => router.push('/study')}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
-          >
-            Back to Study Options
-          </button>
+          <p className="text-xl mb-4">All words reviewed! Starting over...</p>
         </div>
       )}
     </div>

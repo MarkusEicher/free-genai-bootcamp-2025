@@ -6,10 +6,25 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const decodedId = decodeURIComponent(params.id)
+    const sessionDate = new Date(decodedId)
+
+    if (isNaN(sessionDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid session ID format' },
+        { status: 400 }
+      )
+    }
+    
+    // Get the minute range for the session
+    const sessionStart = new Date(sessionDate)
+    const sessionEnd = new Date(sessionDate.getTime() + 60000) // Add 1 minute
+
     const activities = await prisma.activity.findMany({
       where: {
         createdAt: {
-          equals: new Date(params.id)
+          gte: sessionStart,
+          lt: sessionEnd
         }
       },
       include: {
@@ -18,6 +33,9 @@ export async function GET(
             group: true
           }
         }
+      },
+      orderBy: {
+        createdAt: 'asc'
       }
     })
 
@@ -28,38 +46,26 @@ export async function GET(
       )
     }
 
-    // Group activities by word to count successes and failures
-    const wordStats = activities.reduce((acc, activity) => {
-      const word = activity.word
-      if (!word) return acc
-
-      if (!acc[word.id]) {
-        acc[word.id] = {
-          kanji: word.text,
-          romaji: word.translation,
-          english: word.translation,
-          correct: 0,
-          wrong: 0
-        }
-      }
-
-      if (activity.success) {
-        acc[word.id].correct++
-      } else {
-        acc[word.id].wrong++
-      }
-
-      return acc
-    }, {} as Record<string, any>)
+    // Group activities by word to avoid duplicates
+    const wordsMap = new Map()
+    activities.forEach(activity => {
+      if (!activity.word) return
+      
+      wordsMap.set(activity.word.id, {
+        text: activity.word.text,
+        translation: activity.word.translation,
+        activities: [{
+          success: activity.success
+        }]
+      })
+    })
 
     const sessionData = {
-      activity: {
-        type: 'Typing Tutor',
-        group: activities[0].word?.group?.name || 'No Group'
-      },
-      startTime: activities[0].createdAt.toISOString(),
-      reviewItems: activities.length,
-      words: Object.values(wordStats)
+      id: decodedId,
+      type: activities[0].type || 'Study Session',
+      createdAt: activities[0].createdAt.toISOString(),
+      groupName: activities[0].word?.group?.name || 'No Group',
+      words: Array.from(wordsMap.values())
     }
 
     return NextResponse.json({ data: sessionData })

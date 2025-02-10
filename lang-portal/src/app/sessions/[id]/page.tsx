@@ -1,45 +1,57 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 interface SessionDetails {
-  activity: {
-    type: string
-    group: string
-  }
-  startTime: string
-  reviewItems: number
-  words: {
-    kanji: string
-    romaji: string
-    english: string
-    correct: number
-    wrong: number
-  }[]
+  id: string
+  type: string
+  createdAt: string
+  groupName: string
+  words: Array<{
+    text: string
+    translation: string
+    activities: Array<{
+      success: boolean
+    }>
+  }>
 }
 
-export default function SessionDetailsPage({ params }: { params: { id: string } }) {
+export default function SessionDetailsPage() {
+  const params = useParams()
+  const sessionId = decodeURIComponent(params?.id as string)
+  
   const [session, setSession] = useState<SessionDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchSession = async () => {
+      if (!sessionId) return
+      
       try {
-        const response = await fetch(`/api/sessions/${params.id}`)
-        if (!response.ok) throw new Error('Failed to fetch session')
+        const encodedId = encodeURIComponent(sessionId)
+        const response = await fetch(`/api/sessions/${encodedId}`)
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Failed to fetch session')
+        }
         const data = await response.json()
+        if (!data.data) {
+          throw new Error('No session data received')
+        }
         setSession(data.data)
       } catch (err) {
-        setError('Failed to load session details')
+        console.error('Error:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load session details')
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchSession()
-  }, [params.id])
+  }, [sessionId])
 
   if (isLoading) return <div className="p-4">Loading...</div>
   if (error) return <div className="p-4 text-red-500">Error: {error}</div>
@@ -57,41 +69,39 @@ export default function SessionDetailsPage({ params }: { params: { id: string } 
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-gray-800 p-4 rounded-lg">
-          <div className="text-gray-400 mb-2">Activity</div>
-          <div className="text-lg">{session.activity.type}</div>
+          <div className="text-gray-400 mb-2">Date</div>
+          <div className="text-lg">{new Date(session.createdAt).toLocaleString()}</div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 mb-2">Activity Type</div>
+          <div className="text-lg">{session.type}</div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg">
           <div className="text-gray-400 mb-2">Group</div>
-          <div className="text-lg">{session.activity.group}</div>
+          <div className="text-lg">{session.groupName}</div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg">
-          <div className="text-gray-400 mb-2">Start Time</div>
-          <div className="text-lg">{new Date(session.startTime).toLocaleString()}</div>
-        </div>
-        <div className="bg-gray-800 p-4 rounded-lg">
-          <div className="text-gray-400 mb-2">Review Items</div>
-          <div className="text-lg">{session.reviewItems}</div>
+          <div className="text-gray-400 mb-2">Words Studied</div>
+          <div className="text-lg">{session.words.length}</div>
         </div>
       </div>
 
       <h2 className="text-xl font-bold mb-4">Words Reviewed</h2>
       <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700">
-          <div className="text-gray-400 font-medium">KANJI</div>
-          <div className="text-gray-400 font-medium">ROMAJI</div>
+        <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-700">
+          <div className="text-gray-400 font-medium">GERMAN</div>
           <div className="text-gray-400 font-medium">ENGLISH</div>
-          <div className="text-gray-400 font-medium">CORRECT</div>
-          <div className="text-gray-400 font-medium">WRONG</div>
+          <div className="text-gray-400 font-medium">RESULT</div>
         </div>
         {session.words.map((word, index) => (
-          <div key={index} className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700">
-            <div className="text-blue-400">{word.kanji}</div>
-            <div>{word.romaji}</div>
-            <div>{word.english}</div>
-            <div className="text-green-500">{word.correct}</div>
-            <div className="text-red-500">{word.wrong}</div>
+          <div key={index} className="grid grid-cols-3 gap-4 p-4 border-b border-gray-700">
+            <div>{word.text}</div>
+            <div>{word.translation}</div>
+            <div className={word.activities[0]?.success ? 'text-green-500' : 'text-red-500'}>
+              {word.activities[0]?.success ? 'Correct' : 'Incorrect'}
+            </div>
           </div>
         ))}
       </div>

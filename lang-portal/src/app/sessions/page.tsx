@@ -1,26 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Activity, Word, Group } from '@prisma/client'
-
-type WordWithGroup = Word & {
-  group: Group | null
-}
-
-type ActivityWithWord = Activity & {
-  word: WordWithGroup
-}
-
-interface SessionStats {
-  total: number
-  correct: number
-  wrong: number
-}
+import Link from 'next/link'
 
 interface Session {
-  date: string
-  activities: ActivityWithWord[]
-  stats: SessionStats
+  id: string
+  type: string
+  createdAt: string
+  wordCount: number
+  successRate: number
+  groupName: string
 }
 
 export default function SessionsPage() {
@@ -29,119 +18,62 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        const response = await fetch('/api/sessions')
+        if (!response.ok) throw new Error('Failed to fetch sessions')
+        const data = await response.json()
+        setSessions(data.data)
+      } catch (err) {
+        console.error('Error:', err)
+        setError('Failed to load sessions')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     fetchSessions()
   }, [])
 
-  const fetchSessions = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch('/api/sessions')
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch sessions')
-      }
-
-      setSessions(data.data || [])
-    } catch (error) {
-      console.error('Error fetching sessions:', error)
-      setError('Failed to load sessions')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Study Sessions</h1>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="h-24 bg-gray-200 rounded w-full"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Study Sessions</h1>
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      </div>
-    )
-  }
-
-  if (!sessions || sessions.length === 0) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Study Sessions</h1>
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400">
-            No study sessions yet. Start practicing to see your history!
-          </p>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <div className="p-4">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>
 
   return (
-    <div className="p-4">
+    <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Study Sessions</h1>
-      <div className="space-y-6">
-        {sessions.map((session) => (
-          <div key={session.date} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">
-                {new Date(session.date).toLocaleDateString()}
-              </h2>
-              <div className="text-sm">
-                <span className="text-green-500 mr-3">
-                  ✓ {session.stats.correct} correct
-                </span>
-                <span className="text-red-500">
-                  ✗ {session.stats.wrong} wrong
-                </span>
+
+      <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700">
+          <div className="text-gray-400 font-medium">DATE</div>
+          <div className="text-gray-400 font-medium">TYPE</div>
+          <div className="text-gray-400 font-medium">GROUP</div>
+          <div className="text-gray-400 font-medium">WORDS</div>
+          <div className="text-gray-400 font-medium">SUCCESS RATE</div>
+        </div>
+        {sessions.map((session) => {
+          // Format the session ID to ensure it's URL-safe
+          const sessionId = encodeURIComponent(session.id)
+          return (
+            <Link
+              key={session.id}
+              href={`/sessions/${sessionId}`}
+              className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700 hover:bg-gray-700"
+            >
+              <div>{new Date(session.createdAt).toLocaleString()}</div>
+              <div>{session.type}</div>
+              <div>{session.groupName}</div>
+              <div>{session.wordCount} words</div>
+              <div className={session.successRate >= 70 ? 'text-green-500' : 'text-yellow-500'}>
+                {session.successRate}%
               </div>
-            </div>
-
-            <div className="space-y-2">
-              {session.activities.map((activity) => {
-                // Skip rendering if word data is missing
-                if (!activity?.word) return null
-
-                return (
-                  <div 
-                    key={activity.id}
-                    className={`p-2 rounded ${
-                      activity.success 
-                        ? 'bg-green-50 dark:bg-green-900/50' 
-                        : 'bg-red-50 dark:bg-red-900/50'
-                    }`}
-                  >
-                    <p>
-                      {activity.word.text} ({activity.word.translation})
-                      {activity.word.group && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                          Group: {activity.word.group.name}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(activity.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
+            </Link>
+          )
+        })}
+        {sessions.length === 0 && (
+          <div className="p-4 text-center text-gray-400">
+            No study sessions yet. Start studying to see your progress!
           </div>
-        ))}
+        )}
       </div>
     </div>
   )

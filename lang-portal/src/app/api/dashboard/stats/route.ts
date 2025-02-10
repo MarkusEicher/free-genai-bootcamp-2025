@@ -3,82 +3,48 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
-    // Get basic stats
-    const [totalWords, activities] = await Promise.all([
-      prisma.word.count(),
-      prisma.activity.findMany({
-        include: {
-          word: {
-            include: {
-              group: true
-            }
+    // Get all activities
+    const activities = await prisma.activity.findMany({
+      include: {
+        word: {
+          include: {
+            group: true
           }
         }
-      })
-    ])
-
-    // Calculate success rate
-    const successfulActivities = activities.filter(a => a.success).length
-    const successRate = activities.length > 0
-      ? Math.round((successfulActivities / activities.length) * 100)
-      : 0
-
-    // Get active groups
-    const activeGroups = await prisma.group.count({
-      where: {
-        words: {
-          some: {}
-        }
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     })
 
-    // Get last session
-    const lastActivity = activities[0]
-    const lastSession = lastActivity ? {
-      type: lastActivity.type,
-      date: lastActivity.createdAt.toISOString(),
-      correct: activities.filter(a => 
-        a.createdAt.getTime() === lastActivity.createdAt.getTime() && a.success
-      ).length,
-      wrong: activities.filter(a => 
-        a.createdAt.getTime() === lastActivity.createdAt.getTime() && !a.success
-      ).length,
-      groupId: lastActivity.word.groupId
-    } : undefined
-
-    // Calculate study sessions (unique dates)
-    const uniqueDates = new Set(
-      activities.map(a => a.createdAt.toISOString().split('T')[0])
-    )
-    const studySessions = uniqueDates.size
-
-    // Calculate study streak
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    const sessionDates = [...uniqueDates].sort().reverse()
-    let studyStreak = 0
-    
-    for (let i = 0; i < sessionDates.length; i++) {
-      const expectedDate = new Date(today)
-      expectedDate.setDate(today.getDate() - i)
-      const expectedDateStr = expectedDate.toISOString().split('T')[0]
-      
-      if (sessionDates[i] === expectedDateStr) {
-        studyStreak++
-      } else {
-        break
+    // Group activities by timestamp (rounded to the nearest minute to group related activities)
+    const sessions = activities.reduce((acc, activity) => {
+      const timestamp = new Date(activity.createdAt).toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+      if (!acc.has(timestamp)) {
+        acc.set(timestamp, [])
       }
-    }
+      acc.get(timestamp)?.push(activity)
+      return acc
+    }, new Map<string, any[]>())
+
+    // Calculate total statistics
+    const totalWords = await prisma.word.count()
+    const totalGroups = await prisma.group.count()
+    const sessionCount = sessions.size
+    
+    // Calculate overall success rate
+    const totalAttempts = activities.length
+    const successfulAttempts = activities.filter(a => a.success).length
+    const successRate = totalAttempts > 0 
+      ? Math.round((successfulAttempts / totalAttempts) * 100)
+      : 0
 
     return NextResponse.json({
       data: {
         totalWords,
-        successRate,
-        studySessions,
-        activeGroups,
-        studyStreak,
-        lastSession
+        totalGroups,
+        studySessions: sessionCount,
+        successRate
       }
     })
   } catch (error) {
