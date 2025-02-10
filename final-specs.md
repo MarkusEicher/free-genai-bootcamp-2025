@@ -229,4 +229,53 @@ const GroupSchema = z.object({
 [Additional schemas...]
 ```
 
+## Additional Specifications
+
+### Activity Types
+```typescript
+enum ActivityType {
+  TYPING_TUTOR = 'typing_tutor',
+  MULTIPLE_CHOICE = 'multiple_choice',
+  FLASHCARDS = 'flashcards'
+}
+
+interface Activity {
+  id: string;
+  type: ActivityType;
+  name: string;
+  description: string;
+  configuration: Record<string, unknown>;
+}
+```
+
+### API Response Status Codes
+- 200: Success
+- 201: Created
+- 400: Bad Request
+- 404: Not Found
+- 500: Internal Server Error
+
+### Installation Requirements
+```bash
+# Required environment variables
+DATABASE_URL="file:./words.db"
+NODE_ENV="development"
+PORT=3000
+```
+
+### Development Setup
+```bash
+# Initialize project
+npm install
+
+# Generate Prisma client
+npx prisma generate
+
+# Run database migrations
+npx prisma migrate dev
+
+# Start development server
+npm run dev
+```
+
 This specification provides a complete structure for both frontend and backend, including proper TypeScript support, error handling, validation, and database schema with proper indexing and relationships.
