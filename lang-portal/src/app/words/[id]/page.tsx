@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface Word {
@@ -12,6 +12,11 @@ interface Word {
     id: string
     name: string
   }
+}
+
+interface Group {
+  id: string
+  name: string
 }
 
 interface Activity {
@@ -29,51 +34,92 @@ interface WordStats {
 
 export default function WordDetailsPage() {
   const params = useParams()
+  const router = useRouter()
   const wordId = params?.id as string
   
   const [wordStats, setWordStats] = useState<WordStats | null>(null)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
-    const fetchWordDetails = async () => {
-      if (!wordId) return
-
-      try {
-        const response = await fetch(`/api/words/${wordId}`)
-        if (!response.ok) throw new Error('Failed to fetch word details')
-        const data = await response.json()
-        
-        if (data.data) {
-          const activities = data.data.activities || []
-          const totalAttempts = activities.length
-          const successfulAttempts = activities.filter((a: Activity) => a.success).length
-          const successRate = totalAttempts > 0 
-            ? Math.round((successfulAttempts / totalAttempts) * 100) 
-            : 0
-
-          setWordStats({
-            word: {
-              id: data.data.id,
-              text: data.data.text,
-              translation: data.data.translation,
-              group: data.data.group
-            },
-            activities: activities,
-            successRate,
-            totalAttempts
-          })
-        }
-      } catch (err) {
-        console.error('Error:', err)
-        setError('Failed to load word details')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchWordDetails()
+    Promise.all([fetchWordDetails(), fetchGroups()])
+      .finally(() => setIsLoading(false))
   }, [wordId])
+
+  const fetchWordDetails = async () => {
+    if (!wordId) return
+
+    try {
+      const response = await fetch(`/api/words/${wordId}`)
+      if (!response.ok) throw new Error('Failed to fetch word details')
+      const data = await response.json()
+      
+      if (data.data) {
+        const activities = data.data.activities || []
+        const totalAttempts = activities.length
+        const successfulAttempts = activities.filter((a: Activity) => a.success).length
+        const successRate = totalAttempts > 0 
+          ? Math.round((successfulAttempts / totalAttempts) * 100) 
+          : 0
+
+        setWordStats({
+          word: {
+            id: data.data.id,
+            text: data.data.text,
+            translation: data.data.translation,
+            group: data.data.group
+          },
+          activities: activities,
+          successRate,
+          totalAttempts
+        })
+        setSelectedGroupId(data.data.group?.id || '')
+      }
+    } catch (err) {
+      console.error('Error:', err)
+      setError('Failed to load word details')
+    }
+  }
+
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch('/api/groups')
+      if (!response.ok) throw new Error('Failed to fetch groups')
+      const data = await response.json()
+      setGroups(data.data)
+    } catch (err) {
+      console.error('Error fetching groups:', err)
+    }
+  }
+
+  const updateWordGroup = async () => {
+    setIsUpdating(true)
+    try {
+      const response = await fetch(`/api/words/${wordId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          groupId: selectedGroupId || null
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to update word')
+      
+      // Refresh word details
+      await fetchWordDetails()
+      router.refresh()
+    } catch (err) {
+      console.error('Error:', err)
+      setError('Failed to update word group')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   if (isLoading) return <div className="p-4">Loading...</div>
   if (error) return <div className="p-4 text-red-500">Error: {error}</div>
@@ -102,17 +148,30 @@ export default function WordDetailsPage() {
         </div>
         <div className="bg-gray-800 p-4 rounded-lg">
           <div className="text-gray-400 mb-2">Group</div>
-          <div className="text-lg">
-            {wordStats.word.group ? (
-              <Link 
-                href={`/groups/${wordStats.word.group.id}`}
-                className="text-blue-400 hover:text-blue-300"
-              >
-                {wordStats.word.group.name}
-              </Link>
-            ) : (
-              <span className="text-gray-500">No Group</span>
-            )}
+          <div className="flex items-center gap-4">
+            <select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className="flex-1 p-2 bg-gray-700 rounded border border-gray-600 text-white"
+            >
+              <option value="">No Group</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={updateWordGroup}
+              disabled={isUpdating || selectedGroupId === wordStats.word.group?.id}
+              className={`px-4 py-2 rounded ${
+                isUpdating || selectedGroupId === wordStats.word.group?.id
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {isUpdating ? 'Updating...' : 'Update'}
+            </button>
           </div>
         </div>
         <div className="bg-gray-800 p-4 rounded-lg">

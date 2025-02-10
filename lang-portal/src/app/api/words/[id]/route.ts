@@ -9,7 +9,9 @@ export async function GET(
 ) {
   try {
     const word = await prisma.word.findUnique({
-      where: { id: params.id },
+      where: {
+        id: params.id,
+      },
       include: {
         group: true,
         activities: {
@@ -31,7 +33,7 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching word:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch word details' },
+      { error: 'Failed to fetch word' },
       { status: 500 }
     )
   }
@@ -67,6 +69,41 @@ export async function DELETE(
     return NextResponse.json(
       { error: 'Failed to delete word' },
       { status: 400 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    const { groupId } = body
+
+    const updatedWord = await prisma.word.update({
+      where: {
+        id: params.id,
+      },
+      data: {
+        groupId: groupId || null,
+      },
+      include: {
+        group: true,
+        activities: {
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({ data: updatedWord })
+  } catch (error) {
+    console.error('Error updating word:', error)
+    return NextResponse.json(
+      { error: 'Failed to update word' },
+      { status: 500 }
     )
   }
 } 
