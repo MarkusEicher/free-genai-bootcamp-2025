@@ -7,7 +7,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: '📊' },
   { href: '/groups', label: 'Word Groups', icon: '📑' },
   { href: '/words', label: 'Words', icon: '📝' },
-  { href: '/study', label: 'Study Activities', icon: '📚' },
+  { href: '/activities', label: 'Study Activities', icon: '📚' },
   { href: '/sessions', label: 'Sessions', icon: '⏱️' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ]

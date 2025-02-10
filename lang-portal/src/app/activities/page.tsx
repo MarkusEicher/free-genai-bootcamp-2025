@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Word {
   text: string
@@ -46,7 +47,15 @@ export default function ActivitiesPage() {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Study Activities</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Study Activities</h1>
+        <Link 
+          href="/study" 
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Start New Study Session
+        </Link>
+      </div>
       <div className="space-y-4">
         {activities.map((activity: Activity) => (
           <div key={activity.id} className="p-4 bg-gray-800 rounded-lg">

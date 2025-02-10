@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 interface StudyActivity {
@@ -8,7 +7,8 @@ interface StudyActivity {
   name: string
   description: string
   thumbnail: string
-  type: 'flashcards' | 'quiz' | 'typing'
+  type: 'flashcards' | 'quiz'
+  comingSoon?: boolean
 }
 
 const STUDY_ACTIVITIES: StudyActivity[] = [
@@ -24,24 +24,23 @@ const STUDY_ACTIVITIES: StudyActivity[] = [
     name: 'Word Quiz',
     description: 'Test your knowledge with multiple choice questions',
     thumbnail: '❓',
-    type: 'quiz'
-  },
-  {
-    id: 'typing',
-    name: 'Typing Practice',
-    description: 'Improve your typing speed and accuracy',
-    thumbnail: '⌨️',
-    type: 'typing'
+    type: 'quiz',
+    comingSoon: true
   }
 ]
 
 export default function StudyPage() {
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Study Activities</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <h1 className="text-2xl font-bold mb-6">Study Options</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {STUDY_ACTIVITIES.map((activity) => (
-          <div key={activity.id} className="bg-gray-800 rounded-lg overflow-hidden">
+          <div key={activity.id} className="bg-gray-800 rounded-lg overflow-hidden relative">
+            {activity.comingSoon && (
+              <div className="absolute top-2 right-2 bg-yellow-500 text-black text-sm font-bold px-2 py-1 rounded">
+                Coming Soon!
+              </div>
+            )}
             <div className="p-6 text-center">
               <div className="text-4xl mb-4">{activity.thumbnail}</div>
               <h2 className="text-xl font-semibold mb-2">{activity.name}</h2>
@@ -49,13 +48,23 @@ export default function StudyPage() {
               <div className="flex gap-2 justify-center">
                 <Link
                   href={`/study/${activity.id}/launch`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className={`px-4 py-2 rounded ${
+                    activity.comingSoon 
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white`}
+                  onClick={e => activity.comingSoon && e.preventDefault()}
                 >
                   Launch
                 </Link>
                 <Link
                   href={`/study/${activity.id}/stats`}
-                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                  className={`px-4 py-2 rounded ${
+                    activity.comingSoon
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-gray-700 hover:bg-gray-600'
+                  } text-white`}
+                  onClick={e => activity.comingSoon && e.preventDefault()}
                 >
                   View Stats
                 </Link>
