@@ -26,6 +26,7 @@ export default function ActivitiesPage() {
   const [message, setMessage] = useState('')
   const [streak, setStreak] = useState(0)
   const [todayProgress, setTodayProgress] = useState({ total: 0, correct: 0 })
+  const [isResetting, setIsResetting] = useState(false)
 
   useEffect(() => {
     fetchWords()
@@ -115,9 +116,46 @@ export default function ActivitiesPage() {
     }
   }
 
+  const handleReset = async () => {
+    if (!window.confirm('Are you sure you want to reset all activities? This cannot be undone.')) {
+      return
+    }
+
+    setIsResetting(true)
+    try {
+      const response = await fetch('/api/activities/reset', {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        setMessage('Activities reset successfully')
+        // Refresh the data
+        fetchStats()
+        fetchStreak()
+        fetchTodayProgress()
+      } else {
+        setMessage('Failed to reset activities')
+      }
+    } catch (error) {
+      console.error('Error resetting activities:', error)
+      setMessage('Error resetting activities')
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Activities</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Study Activities</h1>
+        <button
+          onClick={handleReset}
+          disabled={isResetting}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed"
+        >
+          {isResetting ? 'Resetting...' : 'Reset Activities'}
+        </button>
+      </div>
 
       {/* Stats Section */}
       {stats && (
@@ -130,11 +168,11 @@ export default function ActivitiesPage() {
 
       {/* Progress Section */}
       <div className="mb-8 grid grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <h3 className="font-semibold mb-2">Study Streak</h3>
-          <p className="text-2xl">�� {streak} days</p>
+          <p className="text-2xl">🔥 {streak} days</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <h3 className="font-semibold mb-2">Today's Progress</h3>
           <p>Words: {todayProgress.total}</p>
           <p>Correct: {todayProgress.correct}</p>
@@ -157,7 +195,7 @@ export default function ActivitiesPage() {
               Translate: {currentWord.text}
               {currentWord.group && (
                 <span className="text-sm text-gray-500 ml-2">
-                  (Group: {currentWord.group.name})
+                  Group: {currentWord.group.name}
                 </span>
               )}
             </p>
@@ -166,7 +204,7 @@ export default function ActivitiesPage() {
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               onKeyPress={handleKeyPress}
-              className="border p-2 w-full"
+              className="border p-2 w-full rounded dark:bg-gray-700 dark:border-gray-600"
               placeholder="Enter translation"
               autoFocus
             />
@@ -194,18 +232,18 @@ export default function ActivitiesPage() {
               <div
                 key={activity.id}
                 className={`p-2 rounded ${
-                  activity.success ? 'bg-green-50' : 'bg-red-50'
+                  activity.success ? 'bg-green-50 dark:bg-green-900' : 'bg-red-50 dark:bg-red-900'
                 }`}
               >
                 <p>
                   Word: {activity.word.text} ({activity.word.translation})
                   {activity.word.group && (
-                    <span className="text-sm text-gray-500 ml-2">
+                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
                       Group: {activity.word.group.name}
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   {new Date(activity.createdAt).toLocaleString()}
                 </p>
               </div>

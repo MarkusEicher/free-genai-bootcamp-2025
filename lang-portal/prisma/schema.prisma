@@ -5,7 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma"
 }
 
 datasource db {
@@ -40,16 +40,16 @@ model Group {
 
 model Activity {
   id        String   @id @default(cuid())
-  type      String
   wordId    String
   word      Word     @relation(fields: [wordId], references: [id])
+  type      String   @default("practice")
   success   Boolean
   createdAt DateTime @default(now())
 }
 
 model Settings {
   id                   String   @id @default(cuid())
-  userId               String   @unique @default(cuid()) // For future user support
+  userId               String   @unique @default(cuid())
   dailyGoal            Int      @default(10)
   notificationsEnabled Boolean  @default(true)
   studyReminders       Boolean  @default(true)

@@ -3,59 +3,40 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
-    // Get all activities with their related words and groups
+    // Simple query to test database connection
     const activities = await prisma.activity.findMany({
-      include: {
-        word: {
-          include: {
-            group: true
-          }
-        }
-      },
+      take: 10, // Limit to 10 records
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    // Group activities by date
-    const sessionMap = activities.reduce((acc, activity) => {
-      const date = new Date(activity.createdAt)
-      date.setHours(0, 0, 0, 0)
-      const dateKey = date.toISOString()
-
-      if (!acc[dateKey]) {
-        acc[dateKey] = {
-          date: dateKey,
-          activities: [],
-          stats: {
-            total: 0,
-            correct: 0,
-            wrong: 0
-          }
+    // Return simplified response
+    return NextResponse.json({
+      data: [{
+        date: new Date().toISOString().split('T')[0],
+        activities: activities,
+        stats: {
+          total: activities.length,
+          correct: activities.filter(a => a.success).length,
+          wrong: activities.filter(a => !a.success).length
         }
-      }
+      }]
+    })
 
-      acc[dateKey].activities.push(activity)
-      acc[dateKey].stats.total++
-      if (activity.success) {
-        acc[dateKey].stats.correct++
-      } else {
-        acc[dateKey].stats.wrong++
-      }
-
-      return acc
-    }, {} as Record<string, any>)
-
-    // Convert map to array and sort by date
-    const sessions = Object.values(sessionMap).sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
-
-    return NextResponse.json({ data: sessions })
   } catch (error) {
-    console.error('Error fetching sessions:', error)
+    // Log detailed error information
+    console.error('Sessions Route Error:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace'
+    })
+
     return NextResponse.json(
-      { error: 'Failed to fetch sessions' },
+      { 
+        error: 'Failed to fetch sessions',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

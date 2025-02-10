@@ -24,22 +24,25 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setIsLoading(true)
-        const response = await fetch('/api/dashboard/stats')
-        const data = await response.json()
-        setStats(data.data)
-      } catch (err) {
-        setError('Failed to load dashboard stats')
-        console.error('Error fetching dashboard stats:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchStats()
+    fetchDashboardStats()
   }, [])
+
+  const fetchDashboardStats = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch('/api/stats')
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats')
+      }
+      const data = await response.json()
+      setStats(data.data)
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+      setError('Failed to load dashboard stats')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -80,12 +83,12 @@ export default function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Last Study Session */}
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-3">Last Study Session</h2>
           {stats?.lastSession ? (
             <>
-              <p className="text-gray-600">{stats.lastSession.type}</p>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-300">{stats.lastSession.type}</p>
+              <p className="text-gray-600 dark:text-gray-300">
                 {new Date(stats.lastSession.date).toLocaleDateString()}
               </p>
               <div className="mt-2">
@@ -104,39 +107,41 @@ export default function Home() {
         </div>
 
         {/* Study Progress */}
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-3">Study Progress</h2>
           <div className="mb-4">
-            <p className="text-gray-600">Total Words Studied</p>
-            <p className="text-2xl font-bold">{stats?.totalWords || 0} / 124</p>
+            <p className="text-gray-600 dark:text-gray-300">Total Words Studied</p>
+            <p className="text-2xl font-bold">{stats?.totalWords || 0}</p>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
             <div 
               className="bg-blue-500 h-2.5 rounded-full" 
-              style={{ width: `${((stats?.totalWords || 0) / 124) * 100}%` }}
+              style={{ width: `${Math.min((stats?.totalWords || 0) / 100 * 100, 100)}%` }}
             ></div>
           </div>
-          <p className="text-sm text-gray-500 mt-2">Mastery Progress: 0%</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            Progress: {Math.min(Math.round((stats?.totalWords || 0) / 100 * 100), 100)}%
+          </p>
         </div>
 
         {/* Quick Stats */}
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-3">Quick Stats</h2>
           <div className="space-y-2">
             <p className="flex justify-between">
-              <span className="text-gray-600">Success Rate</span>
+              <span className="text-gray-600 dark:text-gray-300">Success Rate</span>
               <span className="font-medium">{stats?.successRate || 0}%</span>
             </p>
             <p className="flex justify-between">
-              <span className="text-gray-600">Study Sessions</span>
+              <span className="text-gray-600 dark:text-gray-300">Study Sessions</span>
               <span className="font-medium">{stats?.studySessions || 0}</span>
             </p>
             <p className="flex justify-between">
-              <span className="text-gray-600">Active Groups</span>
+              <span className="text-gray-600 dark:text-gray-300">Active Groups</span>
               <span className="font-medium">{stats?.activeGroups || 0}</span>
             </p>
             <p className="flex justify-between">
-              <span className="text-gray-600">Study Streak</span>
+              <span className="text-gray-600 dark:text-gray-300">Study Streak</span>
               <span className="font-medium">{stats?.studyStreak || 0} days</span>
             </p>
           </div>
