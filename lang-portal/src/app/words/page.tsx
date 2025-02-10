@@ -26,11 +26,12 @@ export default function WordsPage() {
   const fetchWords = async () => {
     try {
       const response = await fetch('/api/words')
+      if (!response.ok) throw new Error('Failed to fetch words')
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch words')
       setWords(data.data)
+      setIsLoading(false)
     } catch (err) {
-      console.error('Error fetching words:', err)
+      console.error('Error:', err)
       setError('Failed to load words')
     }
   }
@@ -44,26 +45,26 @@ export default function WordsPage() {
     } catch (err) {
       console.error('Error fetching groups:', err)
       setError('Failed to load groups')
-    } finally {
-      setIsLoading(false)
     }
   }
 
-  const addWord = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       const response = await fetch('/api/words', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newWord)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newWord),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Failed to add word')
-      setWords([data.data, ...words])
+
+      if (!response.ok) throw new Error('Failed to create word')
+      
       setNewWord({ text: '', translation: '', groupId: '' })
+      fetchWords()
     } catch (err) {
-      console.error('Error adding word:', err)
-      setError('Failed to add word')
+      console.error('Error:', err)
     }
   }
 
@@ -117,138 +118,70 @@ export default function WordsPage() {
   }
 
   if (isLoading) return <div className="p-4">Loading...</div>
-  if (error) return <div className="p-4 text-red-500">{error}</div>
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>
 
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-6">Words</h1>
 
-      {/* Add Word Form */}
-      <form onSubmit={addWord} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Add New Word</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <input
-            type="text"
-            value={newWord.text}
-            onChange={(e) => setNewWord({ ...newWord, text: e.target.value })}
-            placeholder="Word"
-            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-            required
-          />
-          <input
-            type="text"
-            value={newWord.translation}
-            onChange={(e) => setNewWord({ ...newWord, translation: e.target.value })}
-            placeholder="Translation"
-            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-            required
-          />
-          <select
-            value={newWord.groupId}
-            onChange={(e) => setNewWord({ ...newWord, groupId: e.target.value })}
-            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-          >
-            <option value="">No Group</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="md:col-span-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Add Word
-          </button>
+      <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="translation" className="block text-gray-400 mb-2">
+              English
+            </label>
+            <input
+              id="translation"
+              type="text"
+              value={newWord.translation}
+              onChange={(e) => setNewWord({ ...newWord, translation: e.target.value })}
+              placeholder="English word"
+              className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="text" className="block text-gray-400 mb-2">
+              German
+            </label>
+            <input
+              id="text"
+              type="text"
+              value={newWord.text}
+              onChange={(e) => setNewWord({ ...newWord, text: e.target.value })}
+              placeholder="German translation"
+              className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+              required
+            />
+          </div>
         </div>
+        <button
+          type="submit"
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Add Word
+        </button>
       </form>
 
-      {/* Words List */}
-      <div className="space-y-4">
-        {words.length === 0 ? (
-          <p className="text-center text-gray-500">No words yet. Add some to get started!</p>
-        ) : (
-          words.map((word) => (
-            <div
-              key={word.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow p-4"
-            >
-              {editingWord?.id === word.id ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input
-                      type="text"
-                      value={editingWord.text}
-                      onChange={(e) => setEditingWord({ ...editingWord, text: e.target.value })}
-                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-                    />
-                    <input
-                      type="text"
-                      value={editingWord.translation}
-                      onChange={(e) => setEditingWord({ ...editingWord, translation: e.target.value })}
-                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-                    />
-                    <select
-                      value={editingWord.groupId || ''}
-                      onChange={(e) => setEditingWord({ ...editingWord, groupId: e.target.value || null })}
-                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
-                    >
-                      <option value="">No Group</option>
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => updateWord(word.id, editingWord)}
-                      className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingWord(null)}
-                      className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center">
-                  <div>
-                    <Link 
-                      href={`/words/${word.id}`}
-                      className="font-medium hover:text-blue-500"
-                    >
-                      {word.text}
-                    </Link>
-                    <p className="text-gray-500">{word.translation}</p>
-                    <p className="text-sm text-gray-500">
-                      {word.group ? `Group: ${word.group.name}` : 'No Group'}
-                    </p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setEditingWord(word)}
-                      className="text-blue-500 hover:text-blue-600"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteWord(word.id)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))
+      <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="grid grid-cols-2 gap-4 p-4 border-b border-gray-700">
+          <div className="text-gray-400 font-medium">ENGLISH</div>
+          <div className="text-gray-400 font-medium">GERMAN</div>
+        </div>
+        {words.map((word) => (
+          <Link
+            key={word.id}
+            href={`/words/${word.id}`}
+            className="grid grid-cols-2 gap-4 p-4 border-b border-gray-700 hover:bg-gray-700"
+          >
+            <div>{word.translation}</div>
+            <div>{word.text}</div>
+          </Link>
+        ))}
+        {words.length === 0 && (
+          <div className="p-4 text-center text-gray-400">
+            No words added yet. Add your first word above!
+          </div>
         )}
       </div>
     </div>

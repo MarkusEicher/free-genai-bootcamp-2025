@@ -1,131 +1,152 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import type { Word, Group, Activity } from '@prisma/client'
+import Link from 'next/link'
 
-interface WordDetails extends Word {
-  group: Group | null
-  activities: Activity[]
+interface Word {
+  id: string
+  text: string
+  translation: string
+  group?: {
+    id: string
+    name: string
+  }
 }
 
-interface StudyStats {
-  correct: number
-  wrong: number
+interface Activity {
+  id: string
+  success: boolean
+  createdAt: string
+}
+
+interface WordStats {
+  word: Word
+  activities: Activity[]
+  successRate: number
+  totalAttempts: number
 }
 
 export default function WordDetailsPage() {
   const params = useParams()
-  const [word, setWord] = useState<WordDetails | null>(null)
+  const wordId = params?.id as string
+  
+  const [wordStats, setWordStats] = useState<WordStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchWordDetails()
-  }, [params.id])
+    const fetchWordDetails = async () => {
+      if (!wordId) return
 
-  const fetchWordDetails = async () => {
-    try {
-      const response = await fetch(`/api/words/${params.id}`)
-      const data = await response.json()
-      
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch word details')
-      setWord(data.data)
-    } catch (err) {
-      console.error('Error fetching word details:', err)
-      setError('Failed to load word details')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      try {
+        const response = await fetch(`/api/words/${wordId}`)
+        if (!response.ok) throw new Error('Failed to fetch word details')
+        const data = await response.json()
+        
+        if (data.data) {
+          const activities = data.data.activities || []
+          const totalAttempts = activities.length
+          const successfulAttempts = activities.filter((a: Activity) => a.success).length
+          const successRate = totalAttempts > 0 
+            ? Math.round((successfulAttempts / totalAttempts) * 100) 
+            : 0
 
-  if (isLoading) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Word Details</h1>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !word) {
-    return (
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">Word Details</h1>
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error || 'Word not found'}
-        </div>
-      </div>
-    )
-  }
-
-  const stats: StudyStats = word.activities.reduce(
-    (acc, activity) => {
-      if (activity.success) {
-        acc.correct++
-      } else {
-        acc.wrong++
+          setWordStats({
+            word: {
+              id: data.data.id,
+              text: data.data.text,
+              translation: data.data.translation,
+              group: data.data.group
+            },
+            activities: activities,
+            successRate,
+            totalAttempts
+          })
+        }
+      } catch (err) {
+        console.error('Error:', err)
+        setError('Failed to load word details')
+      } finally {
+        setIsLoading(false)
       }
-      return acc
-    },
-    { correct: 0, wrong: 0 }
-  )
+    }
+
+    fetchWordDetails()
+  }, [wordId])
+
+  if (isLoading) return <div className="p-4">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>
+  if (!wordStats) return <div className="p-4">Word not found</div>
 
   return (
-    <div className="p-4">
+    <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Word Details</h1>
         <Link
           href="/words"
-          className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded"
+          className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
         >
           Back to Words
         </Link>
       </div>
 
-      {/* Word Information */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2">German</h2>
-          <p className="text-3xl">{word.text}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 mb-2">German</div>
+          <div className="text-2xl">{wordStats.word.text}</div>
         </div>
-
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-2">English</h2>
-          <p className="text-3xl">{word.translation}</p>
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 mb-2">English</div>
+          <div className="text-2xl">{wordStats.word.translation}</div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 mb-2">Group</div>
+          <div className="text-lg">
+            {wordStats.word.group ? (
+              <Link 
+                href={`/groups/${wordStats.word.group.id}`}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                {wordStats.word.group.name}
+              </Link>
+            ) : (
+              <span className="text-gray-500">No Group</span>
+            )}
+          </div>
+        </div>
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 mb-2">Success Rate</div>
+          <div className="text-lg">
+            <span className={wordStats.successRate >= 70 ? 'text-green-500' : 'text-yellow-500'}>
+              {wordStats.successRate}%
+            </span>
+            <span className="text-gray-400 text-sm ml-2">
+              ({wordStats.totalAttempts} attempts)
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Study Statistics */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Study Statistics</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <h3 className="text-gray-600 dark:text-gray-400">Correct Answers</h3>
-            <p className="text-3xl font-bold text-green-500">{stats.correct}</p>
+      {wordStats.activities.length > 0 && (
+        <>
+          <h2 className="text-xl font-bold mb-4">Recent Activity</h2>
+          <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <div className="grid grid-cols-2 gap-4 p-4 border-b border-gray-700">
+              <div className="text-gray-400 font-medium">DATE</div>
+              <div className="text-gray-400 font-medium">RESULT</div>
+            </div>
+            {wordStats.activities.slice(0, 10).map((activity) => (
+              <div key={activity.id} className="grid grid-cols-2 gap-4 p-4 border-b border-gray-700">
+                <div>{new Date(activity.createdAt).toLocaleString()}</div>
+                <div className={activity.success ? 'text-green-500' : 'text-red-500'}>
+                  {activity.success ? 'Correct' : 'Incorrect'}
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <h3 className="text-gray-600 dark:text-gray-400">Wrong Answers</h3>
-            <p className="text-3xl font-bold text-red-500">{stats.wrong}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Word Groups */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Word Groups</h2>
-        {word.group ? (
-          <div className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded">
-            {word.group.name}
-          </div>
-        ) : (
-          <p className="text-gray-500">No groups assigned</p>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 } 
