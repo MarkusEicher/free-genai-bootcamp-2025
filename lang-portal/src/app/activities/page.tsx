@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Word, Activity, Group } from '@prisma/client'
+import Link from 'next/link'
 
 // Define the Word type with its group relation
 type WordWithGroup = Word & {
@@ -13,186 +14,227 @@ type ActivityWithWord = Activity & {
 }
 
 interface ActivityStats {
-  totalActivities: number
-  successRate: number
-  recentActivities: ActivityWithWord[]
+  correct: number
+  wrong: number
+  total: number
 }
 
 export default function ActivitiesPage() {
-  const [words, setWords] = useState<WordWithGroup[]>([])
-  const [stats, setStats] = useState<ActivityStats | null>(null)
   const [currentWord, setCurrentWord] = useState<WordWithGroup | null>(null)
   const [answer, setAnswer] = useState('')
   const [message, setMessage] = useState('')
-  const [streak, setStreak] = useState(0)
-  const [todayProgress, setTodayProgress] = useState({ total: 0, correct: 0 })
-  const [isResetting, setIsResetting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState<ActivityStats>({
+    correct: 0,
+    wrong: 0,
+    total: 0
+  })
+  const [recentActivities, setRecentActivities] = useState<ActivityWithWord[]>([])
+  const [hasWords, setHasWords] = useState<boolean | null>(null)
 
   useEffect(() => {
-    fetchWords()
-    fetchStats()
-    fetchStreak()
-    fetchTodayProgress()
+    checkForWords()
+    fetchActivities()
   }, [])
 
-  const fetchWords = async () => {
+  const checkForWords = async () => {
     try {
       const response = await fetch('/api/words')
       const data = await response.json()
-      setWords(data.data)
-    } catch (error) {
-      console.error('Error fetching words:', error)
+      setHasWords(data.data && data.data.length > 0)
+    } catch (err) {
+      console.error('Error checking for words:', err)
+      setHasWords(false)
     }
   }
 
-  const fetchStats = async () => {
+  const fetchActivities = async () => {
     try {
-      const response = await fetch('/api/activities')
+      setIsLoading(true)
+      const [activitiesRes, statsRes] = await Promise.all([
+        fetch('/api/activities'),
+        fetch('/api/activities/today')
+      ])
+
+      if (!activitiesRes.ok || !statsRes.ok) {
+        throw new Error('Failed to fetch activities data')
+      }
+
+      const activitiesData = await activitiesRes.json()
+      const statsData = await statsRes.json()
+
+      setRecentActivities(activitiesData.data || [])
+      setStats(statsData.data || { correct: 0, wrong: 0, total: 0 })
+    } catch (err) {
+      console.error('Error fetching activities:', err)
+      setError('Failed to load activities')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const startPractice = async () => {
+    try {
+      setMessage('') // Clear any previous messages
+      const response = await fetch('/api/words/random')
       const data = await response.json()
-      setStats(data.data)
-    } catch (error) {
-      console.error('Error fetching stats:', error)
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch word')
+      }
+      
+      if (!data.data) {
+        setMessage('No words available. Please add some words first.')
+        return
+      }
+      
+      setCurrentWord(data.data)
+      setAnswer('')
+    } catch (err) {
+      console.error('Error in startPractice:', err)
+      setMessage('Failed to start practice. Please try again.')
     }
-  }
-
-  const fetchStreak = async () => {
-    const response = await fetch('/api/activities/streak')
-    const data = await response.json()
-    setStreak(data.streak)
-  }
-
-  const fetchTodayProgress = async () => {
-    const response = await fetch('/api/activities/today')
-    const data = await response.json()
-    setTodayProgress(data.progress)
-  }
-
-  const startPractice = () => {
-    if (words.length === 0) {
-      setMessage('No words available for practice')
-      return
-    }
-    const randomWord = words[Math.floor(Math.random() * words.length)]
-    setCurrentWord(randomWord)
-    setAnswer('')
-    setMessage('')
   }
 
   const checkAnswer = async () => {
     if (!currentWord) return
 
-    const isCorrect = answer.toLowerCase().trim() === currentWord.translation.toLowerCase().trim()
-    
     try {
-      await fetch('/api/activities', {
+      const success = answer.toLowerCase().trim() === currentWord.translation.toLowerCase().trim()
+      
+      const response = await fetch('/api/activities', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'PRACTICE',
           wordId: currentWord.id,
-          success: isCorrect,
-        }),
+          success,
+          type: 'practice'
+        })
       })
 
-      setMessage(isCorrect ? 'Correct! 🎉' : `Wrong. The correct answer is: ${currentWord.translation}`)
-      await fetchStats()
-      
-      if (isCorrect) {
-        setTimeout(() => {
-          startPractice() // Move to next word after correct answer
-        }, 1500)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to record activity')
       }
-    } catch (error) {
-      console.error('Error recording activity:', error)
-      setMessage('Error recording activity')
+
+      setMessage(success ? 'Correct!' : `Wrong! The answer was: ${currentWord.translation}`)
+      
+      // Refresh activities and stats
+      await Promise.all([
+        fetchActivities(),
+        // Trigger a refresh of the homepage stats
+        fetch('/api/stats', { 
+          method: 'GET',
+          cache: 'no-store'
+        })
+      ])
+      
+      // Get next word after a brief delay
+      setTimeout(startPractice, 2000)
+    } catch (err) {
+      console.error('Error checking answer:', err)
+      setMessage('Failed to record activity. Please try again.')
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       checkAnswer()
     }
   }
 
-  const handleReset = async () => {
-    if (!window.confirm('Are you sure you want to reset all activities? This cannot be undone.')) {
-      return
-    }
+  const NoWordsMessage = () => (
+    <div className="bg-yellow-50 dark:bg-yellow-900/50 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-6">
+      <h3 className="text-lg font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+        No Words Available
+      </h3>
+      <p className="text-yellow-700 dark:text-yellow-300 mb-4">
+        You need to add some words before you can start practicing.
+      </p>
+      <Link
+        href="/words"
+        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+      >
+        Add Words →
+      </Link>
+    </div>
+  )
 
-    setIsResetting(true)
-    try {
-      const response = await fetch('/api/activities/reset', {
-        method: 'POST',
-      })
-      
-      if (response.ok) {
-        setMessage('Activities reset successfully')
-        // Refresh the data
-        fetchStats()
-        fetchStreak()
-        fetchTodayProgress()
-      } else {
-        setMessage('Failed to reset activities')
-      }
-    } catch (error) {
-      console.error('Error resetting activities:', error)
-      setMessage('Error resetting activities')
-    } finally {
-      setIsResetting(false)
-    }
+  if (isLoading) {
+    return (
+      <div className="p-4">
+        <h1 className="text-2xl font-bold mb-6">Study Activities</h1>
+        <div className="animate-pulse space-y-4">
+          <div className="h-32 bg-gray-200 rounded"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    )
   }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <h1 className="text-2xl font-bold mb-6">Study Activities</h1>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      </div>
+    )
+  }
+
+  const successRate = stats.total > 0 
+    ? ((stats.correct / stats.total) * 100).toFixed(1) 
+    : '0.0'
 
   return (
     <div className="p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Study Activities</h1>
-        <button
-          onClick={handleReset}
-          disabled={isResetting}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed"
-        >
-          {isResetting ? 'Resetting...' : 'Reset Activities'}
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold mb-6">Study Activities</h1>
 
-      {/* Stats Section */}
-      {stats && (
-        <div className="mb-8 p-4 bg-gray-50 rounded">
-          <h2 className="text-xl font-semibold mb-2">Statistics</h2>
-          <p>Total Activities: {stats.totalActivities}</p>
-          <p>Success Rate: {stats.successRate.toFixed(1)}%</p>
-        </div>
-      )}
+      {/* Show warning if no words are available */}
+      {hasWords === false && <NoWordsMessage />}
 
-      {/* Progress Section */}
-      <div className="mb-8 grid grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Study Streak</h3>
-          <p className="text-2xl">🔥 {streak} days</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-          <h3 className="font-semibold mb-2">Today's Progress</h3>
-          <p>Words: {todayProgress.total}</p>
-          <p>Correct: {todayProgress.correct}</p>
+      {/* Today's Progress */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <h2 className="text-lg font-semibold mb-3">Today's Progress</h2>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <p className="text-gray-600 dark:text-gray-400">Total</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </div>
+          <div>
+            <p className="text-gray-600 dark:text-gray-400">Correct</p>
+            <p className="text-2xl font-bold text-green-500">{stats.correct}</p>
+          </div>
+          <div>
+            <p className="text-gray-600 dark:text-gray-400">Success Rate</p>
+            <p className="text-2xl font-bold">{successRate}%</p>
+          </div>
         </div>
       </div>
 
       {/* Practice Section */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Practice</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <h2 className="text-lg font-semibold mb-3">Practice</h2>
         {!currentWord ? (
-          <button
-            onClick={startPractice}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Start Practice
-          </button>
+          hasWords ? (
+            <button
+              onClick={startPractice}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              Start Practice
+            </button>
+          ) : (
+            <p className="text-gray-500">
+              Add some words to start practicing
+            </p>
+          )
         ) : (
           <div className="space-y-4">
-            <p className="text-lg font-medium">
-              Translate: {currentWord.text}
+            <p className="text-lg">
+              Translate: <span className="font-medium">{currentWord.text}</span>
               {currentWord.group && (
                 <span className="text-sm text-gray-500 ml-2">
                   Group: {currentWord.group.name}
@@ -214,29 +256,39 @@ export default function ActivitiesPage() {
             >
               Check Answer
             </button>
-            {message && (
-              <p className={`mt-2 ${message.includes('Correct') ? 'text-green-600' : 'text-red-600'}`}>
-                {message}
-              </p>
-            )}
           </div>
+        )}
+        {message && (
+          <p className={`mt-2 ${
+            message.includes('Correct') 
+              ? 'text-green-600' 
+              : message.includes('Wrong') 
+                ? 'text-red-600' 
+                : 'text-yellow-600'
+          }`}>
+            {message}
+          </p>
         )}
       </div>
 
       {/* Recent Activities */}
-      {stats?.recentActivities && stats.recentActivities.length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Recent Activities</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <h2 className="text-lg font-semibold mb-3">Recent Activities</h2>
+        {recentActivities.length === 0 ? (
+          <p className="text-gray-500 text-center">No activities yet</p>
+        ) : (
           <div className="space-y-2">
-            {stats.recentActivities.map((activity) => (
+            {recentActivities.map((activity) => (
               <div
                 key={activity.id}
                 className={`p-2 rounded ${
-                  activity.success ? 'bg-green-50 dark:bg-green-900' : 'bg-red-50 dark:bg-red-900'
+                  activity.success 
+                    ? 'bg-green-50 dark:bg-green-900/50' 
+                    : 'bg-red-50 dark:bg-red-900/50'
                 }`}
               >
                 <p>
-                  Word: {activity.word.text} ({activity.word.translation})
+                  {activity.word.text} ({activity.word.translation})
                   {activity.word.group && (
                     <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
                       Group: {activity.word.group.name}
@@ -249,8 +301,8 @@ export default function ActivitiesPage() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 } 

@@ -3,30 +3,34 @@
 import { useState, useEffect } from 'react'
 import type { Word, Group } from '@prisma/client'
 
-type WordWithGroup = Word & {
+interface WordWithGroup extends Word {
   group: Group | null
 }
 
 export default function WordsPage() {
-  const [word, setWord] = useState({ text: '', translation: '', groupId: '' })
   const [words, setWords] = useState<WordWithGroup[]>([])
   const [groups, setGroups] = useState<Group[]>([])
-  const [message, setMessage] = useState('')
-  const [search, setSearch] = useState('')
-  const [selectedGroup, setSelectedGroup] = useState('')
+  const [newWord, setNewWord] = useState({ text: '', translation: '', groupId: '' })
+  const [editingWord, setEditingWord] = useState<WordWithGroup | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchWords()
-    fetchGroups()
+    Promise.all([
+      fetchWords(),
+      fetchGroups()
+    ])
   }, [])
 
   const fetchWords = async () => {
     try {
       const response = await fetch('/api/words')
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch words')
       setWords(data.data)
-    } catch (error) {
-      console.error('Error fetching words:', error)
+    } catch (err) {
+      console.error('Error fetching words:', err)
+      setError('Failed to load words')
     }
   }
 
@@ -34,162 +38,200 @@ export default function WordsPage() {
     try {
       const response = await fetch('/api/groups')
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to fetch groups')
       setGroups(data.data)
-    } catch (error) {
-      console.error('Error fetching groups:', error)
+    } catch (err) {
+      console.error('Error fetching groups:', err)
+      setError('Failed to load groups')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const addWord = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       const response = await fetch('/api/words', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(word),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWord)
       })
       const data = await response.json()
-      setMessage('Word created successfully!')
-      setWord({ text: '', translation: '', groupId: '' })
-      fetchWords()
-    } catch (error) {
-      setMessage('Error creating word')
-      console.error('Error:', error)
+      if (!response.ok) throw new Error(data.error || 'Failed to add word')
+      setWords([data.data, ...words])
+      setNewWord({ text: '', translation: '', groupId: '' })
+    } catch (err) {
+      console.error('Error adding word:', err)
+      setError('Failed to add word')
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const updateWord = async (wordId: string, updates: Partial<Word>) => {
     try {
-      await fetch(`/api/words/${id}`, {
-        method: 'DELETE',
+      const response = await fetch(`/api/words/${wordId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
       })
-      setMessage('Word deleted successfully!')
-      fetchWords()
-    } catch (error) {
-      setMessage('Error deleting word')
-      console.error('Error:', error)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to update word')
+      
+      setWords(words.map(word => 
+        word.id === wordId 
+          ? { ...word, ...data.data }
+          : word
+      ))
+      setEditingWord(null)
+    } catch (err) {
+      console.error('Error updating word:', err)
+      setError('Failed to update word')
     }
   }
 
-  const filteredWords = words.filter(word => {
-    const matchesSearch = search === '' || 
-      word.text.toLowerCase().includes(search.toLowerCase()) ||
-      word.translation.toLowerCase().includes(search.toLowerCase())
-    const matchesGroup = selectedGroup === '' || word.groupId === selectedGroup
-    return matchesSearch && matchesGroup
-  })
+  const deleteWord = async (wordId: string) => {
+    if (!confirm('Are you sure you want to delete this word?')) return
+
+    try {
+      const response = await fetch(`/api/words/${wordId}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete word')
+      setWords(words.filter(word => word.id !== wordId))
+    } catch (err) {
+      console.error('Error deleting word:', err)
+      setError('Failed to delete word')
+    }
+  }
+
+  if (isLoading) return <div className="p-4">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">{error}</div>
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Words Management</h1>
-      
-      {/* Create Word Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block mb-2">
-            Word:
-            <input
-              type="text"
-              value={word.text}
-              onChange={(e) => setWord({ ...word, text: e.target.value })}
-              className="border p-2 w-full"
-              required
-            />
-          </label>
+      <h1 className="text-2xl font-bold mb-6">Words</h1>
+
+      {/* Add Word Form */}
+      <form onSubmit={addWord} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <h2 className="text-lg font-semibold mb-4">Add New Word</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <input
+            type="text"
+            value={newWord.text}
+            onChange={(e) => setNewWord({ ...newWord, text: e.target.value })}
+            placeholder="Word"
+            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+            required
+          />
+          <input
+            type="text"
+            value={newWord.translation}
+            onChange={(e) => setNewWord({ ...newWord, translation: e.target.value })}
+            placeholder="Translation"
+            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+            required
+          />
+          <select
+            value={newWord.groupId}
+            onChange={(e) => setNewWord({ ...newWord, groupId: e.target.value })}
+            className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+          >
+            <option value="">No Group</option>
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="md:col-span-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Add Word
+          </button>
         </div>
-        <div>
-          <label className="block mb-2">
-            Translation:
-            <input
-              type="text"
-              value={word.translation}
-              onChange={(e) => setWord({ ...word, translation: e.target.value })}
-              className="border p-2 w-full"
-              required
-            />
-          </label>
-        </div>
-        <div>
-          <label className="block mb-2">
-            Group:
-            <select
-              value={word.groupId}
-              onChange={(e) => setWord({ ...word, groupId: e.target.value })}
-              className="border p-2 w-full"
-            >
-              <option value="">No Group</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <button
-          type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Add Word
-        </button>
       </form>
 
-      {message && (
-        <p className="my-4 text-green-600">{message}</p>
-      )}
-
-      {/* Search and Filter */}
-      <div className="mb-6 space-y-4">
-        <input
-          type="text"
-          placeholder="Search words..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 w-full rounded"
-        />
-        <select
-          value={selectedGroup}
-          onChange={(e) => setSelectedGroup(e.target.value)}
-          className="border p-2 w-full rounded"
-        >
-          <option value="">All Groups</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Words List */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Existing Words</h2>
-        <div className="space-y-4">
-          {filteredWords.map((word) => (
+      <div className="space-y-4">
+        {words.length === 0 ? (
+          <p className="text-center text-gray-500">No words yet. Add some to get started!</p>
+        ) : (
+          words.map((word) => (
             <div
               key={word.id}
-              className="border p-4 rounded shadow flex justify-between items-center"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow p-4"
             >
-              <div>
-                <h3 className="font-medium">{word.text}</h3>
-                <p className="text-gray-600">{word.translation}</p>
-                {word.group && (
-                  <p className="text-sm text-gray-500">
-                    Group: {word.group.name}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => handleDelete(word.id)}
-                className="text-red-500 hover:text-red-600"
-              >
-                Delete
-              </button>
+              {editingWord?.id === word.id ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <input
+                      type="text"
+                      value={editingWord.text}
+                      onChange={(e) => setEditingWord({ ...editingWord, text: e.target.value })}
+                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <input
+                      type="text"
+                      value={editingWord.translation}
+                      onChange={(e) => setEditingWord({ ...editingWord, translation: e.target.value })}
+                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+                    />
+                    <select
+                      value={editingWord.groupId || ''}
+                      onChange={(e) => setEditingWord({ ...editingWord, groupId: e.target.value || null })}
+                      className="border p-2 rounded dark:bg-gray-700 dark:border-gray-600"
+                    >
+                      <option value="">No Group</option>
+                      {groups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => updateWord(word.id, editingWord)}
+                      className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingWord(null)}
+                      className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">{word.text}</p>
+                    <p className="text-gray-500">{word.translation}</p>
+                    <p className="text-sm text-gray-500">
+                      {word.group ? `Group: ${word.group.name}` : 'No Group'}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setEditingWord(word)}
+                      className="text-blue-500 hover:text-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteWord(word.id)}
+                      className="text-red-500 hover:text-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </div>
     </div>
   )

@@ -3,24 +3,28 @@
 import { useState, useEffect } from 'react'
 import type { Activity, Word, Group } from '@prisma/client'
 
-type SessionActivity = Activity & {
-  word: Word & {
-    group: Group | null
-  }
+type WordWithGroup = Word & {
+  group: Group | null
+}
+
+type ActivityWithWord = Activity & {
+  word: WordWithGroup
+}
+
+interface SessionStats {
+  total: number
+  correct: number
+  wrong: number
 }
 
 interface Session {
   date: string
-  activities: SessionActivity[]
-  stats: {
-    total: number
-    correct: number
-    wrong: number
-  }
+  activities: ActivityWithWord[]
+  stats: SessionStats
 }
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<Session[] | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,15 +36,16 @@ export default function SessionsPage() {
     try {
       setIsLoading(true)
       const response = await fetch('/api/sessions')
-      if (!response.ok) {
-        throw new Error('Failed to fetch sessions')
-      }
       const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch sessions')
+      }
+
       setSessions(data.data || [])
     } catch (error) {
       console.error('Error fetching sessions:', error)
       setError('Failed to load sessions')
-      setSessions([])
     } finally {
       setIsLoading(false)
     }
@@ -77,9 +82,11 @@ export default function SessionsPage() {
     return (
       <div className="p-4">
         <h1 className="text-2xl font-bold mb-6">Study Sessions</h1>
-        <p className="text-gray-500 text-center mt-8">
-          No study sessions yet. Start practicing to see your history!
-        </p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+          <p className="text-gray-500 dark:text-gray-400">
+            No study sessions yet. Start practicing to see your history!
+          </p>
+        </div>
       </div>
     )
   }
@@ -105,28 +112,33 @@ export default function SessionsPage() {
             </div>
 
             <div className="space-y-2">
-              {session.activities.map((activity) => (
-                <div 
-                  key={activity.id}
-                  className={`p-2 rounded ${
-                    activity.success 
-                      ? 'bg-green-50 dark:bg-green-900/50' 
-                      : 'bg-red-50 dark:bg-red-900/50'
-                  }`}
-                >
-                  <p>
-                    {activity.word.text} ({activity.word.translation})
-                    {activity.word.group && (
-                      <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
-                        Group: {activity.word.group.name}
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(activity.createdAt).toLocaleTimeString()}
-                  </p>
-                </div>
-              ))}
+              {session.activities.map((activity) => {
+                // Skip rendering if word data is missing
+                if (!activity?.word) return null
+
+                return (
+                  <div 
+                    key={activity.id}
+                    className={`p-2 rounded ${
+                      activity.success 
+                        ? 'bg-green-50 dark:bg-green-900/50' 
+                        : 'bg-red-50 dark:bg-red-900/50'
+                    }`}
+                  >
+                    <p>
+                      {activity.word.text} ({activity.word.translation})
+                      {activity.word.group && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                          Group: {activity.word.group.name}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(activity.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}

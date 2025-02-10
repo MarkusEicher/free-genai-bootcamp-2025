@@ -3,12 +3,19 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  // Create a group
-  const group = await prisma.group.create({
-    data: {
-      name: 'Basic Phrases',
-    },
-  })
+  // Create some initial groups
+  const groups = await Promise.all([
+    prisma.group.create({
+      data: {
+        name: 'Basic Phrases',
+      },
+    }),
+    prisma.group.create({
+      data: {
+        name: 'Common Words',
+      },
+    }),
+  ])
 
   // Create some words
   const words = await Promise.all([
@@ -16,46 +23,60 @@ async function main() {
       data: {
         text: 'Hello',
         translation: 'Hola',
-        groupId: group.id,
+        groupId: groups[0].id,
       },
     }),
     prisma.word.create({
       data: {
         text: 'Goodbye',
         translation: 'Adiós',
-        groupId: group.id,
+        groupId: groups[0].id,
+      },
+    }),
+    prisma.word.create({
+      data: {
+        text: 'Thank you',
+        translation: 'Gracias',
+        groupId: groups[0].id,
+      },
+    }),
+    prisma.word.create({
+      data: {
+        text: 'Please',
+        translation: 'Por favor',
+        groupId: groups[0].id,
+      },
+    }),
+    prisma.word.create({
+      data: {
+        text: 'Water',
+        translation: 'Agua',
+        groupId: groups[1].id,
+      },
+    }),
+    prisma.word.create({
+      data: {
+        text: 'Food',
+        translation: 'Comida',
+        groupId: groups[1].id,
       },
     }),
   ])
 
-  // Create some activities
-  await Promise.all([
-    prisma.activity.create({
-      data: {
-        wordId: words[0].id,
-        type: 'practice',
-        success: true,
-      },
-    }),
-    prisma.activity.create({
-      data: {
-        wordId: words[1].id,
-        type: 'practice',
-        success: false,
-      },
-    }),
-  ])
+  // Create some sample activities
+  await Promise.all(
+    words.map((word) =>
+      prisma.activity.create({
+        data: {
+          wordId: word.id,
+          type: 'practice',
+          success: Math.random() > 0.5,
+        },
+      })
+    )
+  )
 
-  // Create default settings
-  await prisma.settings.create({
-    data: {
-      dailyGoal: 10,
-      notificationsEnabled: true,
-      studyReminders: true,
-      theme: 'system',
-      language: 'en',
-    },
-  })
+  console.log('Seed data created successfully')
 }
 
 main()
