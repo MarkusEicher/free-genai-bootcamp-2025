@@ -12,6 +12,10 @@ interface DashboardStats {
     wrong: number
     groupId?: string
     groupName?: string
+    createdAt: string
+    successfulWords: number
+    totalWords: number
+    successRate: number
   } | null
   studyProgress: {
     totalWords: number
@@ -95,29 +99,50 @@ export default function HomePage() {
             <span className="text-gray-400">⏱</span>
             Last Study Session
           </h2>
-          {stats.lastSession ? (
-            <>
-              <div className="mb-4">
-                <div className="flex justify-between mb-2">
-                  <div>{stats.lastSession.type}</div>
-                  <div className="text-gray-500">{stats.lastSession.date}</div>
+          {stats.lastSession && (
+            <div className="bg-gray-800 p-6 rounded-lg">
+              <h2 className="text-xl font-bold mb-4">Last Study Session</h2>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-gray-400 mb-1">Date</div>
+                  <div>
+                    {new Date(stats.lastSession.createdAt).toLocaleString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
                 </div>
-                <div className="flex gap-4">
-                  <div className="text-green-500">✓ {stats.lastSession.correct} correct</div>
-                  <div className="text-red-500">✗ {stats.lastSession.wrong} wrong</div>
+                <div>
+                  <div className="text-gray-400 mb-1">Type</div>
+                  <div className="capitalize">{stats.lastSession.type}</div>
                 </div>
+                <div>
+                  <div className="text-gray-400 mb-1">Group</div>
+                  <div>{stats.lastSession.groupName}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400 mb-1">Performance</div>
+                  <div>
+                    {stats.lastSession.successfulWords} of {stats.lastSession.totalWords} words correct (
+                    <span className={stats.lastSession.successRate >= 70 ? 'text-green-500' : 'text-yellow-500'}>
+                      {stats.lastSession.successRate}%
+                    </span>
+                    )
+                  </div>
+                </div>
+                {stats.lastSession.createdAt && (
+                  <Link
+                    href={`/sessions/${encodeURIComponent(stats.lastSession.createdAt)}`}
+                    className="block text-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    View Session Details
+                  </Link>
+                )}
               </div>
-              {stats.lastSession.groupId && (
-                <Link
-                  href={`/groups/${stats.lastSession.groupId}`}
-                  className="text-blue-500 hover:text-blue-600 text-sm"
-                >
-                  View Group →
-                </Link>
-              )}
-            </>
-          ) : (
-            <div className="text-gray-500">No sessions yet</div>
+            </div>
           )}
         </div>
 

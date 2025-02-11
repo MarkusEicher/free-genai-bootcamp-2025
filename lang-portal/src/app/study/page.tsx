@@ -1,77 +1,42 @@
 'use client'
 
 import Link from 'next/link'
-
-interface StudyActivity {
-  id: string
-  name: string
-  description: string
-  thumbnail: string
-  type: 'flashcards' | 'quiz'
-  comingSoon?: boolean
-}
-
-const STUDY_ACTIVITIES: StudyActivity[] = [
-  {
-    id: 'flashcards',
-    name: 'Flashcards',
-    description: 'Practice words with flashcards',
-    thumbnail: '🎴',
-    type: 'flashcards'
-  },
-  {
-    id: 'quiz',
-    name: 'Word Quiz',
-    description: 'Test your knowledge with multiple choice questions',
-    thumbnail: '❓',
-    type: 'quiz',
-    comingSoon: true
-  }
-]
+import { DocumentDuplicateIcon, AcademicCapIcon } from '@heroicons/react/24/outline'
 
 export default function StudyPage() {
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Study Options</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {STUDY_ACTIVITIES.map((activity) => (
-          <div key={activity.id} className="bg-gray-800 rounded-lg overflow-hidden relative">
-            {activity.comingSoon && (
-              <div className="absolute top-2 right-2 bg-yellow-500 text-black text-sm font-bold px-2 py-1 rounded">
-                Coming Soon!
-              </div>
-            )}
-            <div className="p-6 text-center">
-              <div className="text-4xl mb-4">{activity.thumbnail}</div>
-              <h2 className="text-xl font-semibold mb-2">{activity.name}</h2>
-              <p className="text-gray-400 mb-4">{activity.description}</p>
-              <div className="flex gap-2 justify-center">
-                <Link
-                  href={`/study/${activity.id}/launch`}
-                  className={`px-4 py-2 rounded ${
-                    activity.comingSoon 
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  } text-white`}
-                  onClick={e => activity.comingSoon && e.preventDefault()}
-                >
-                  Launch
-                </Link>
-                <Link
-                  href={`/study/${activity.id}/stats`}
-                  className={`px-4 py-2 rounded ${
-                    activity.comingSoon
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-gray-700 hover:bg-gray-600'
-                  } text-white`}
-                  onClick={e => activity.comingSoon && e.preventDefault()}
-                >
-                  View Stats
-                </Link>
-              </div>
+      <h1 className="text-2xl font-bold mb-6">Choose Study Mode</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <Link
+          href="/study/flashcards"
+          className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors group"
+        >
+          <div className="flex items-center gap-4 mb-4">
+            <DocumentDuplicateIcon className="w-8 h-8 text-blue-500 group-hover:text-blue-400" />
+            <h2 className="text-xl font-semibold">Flashcards</h2>
+          </div>
+          <p className="text-gray-400">
+            Practice your vocabulary with interactive flashcards. Test your knowledge
+            of German words and their English translations.
+          </p>
+        </Link>
+
+        <div className="bg-gray-800 rounded-lg p-6 opacity-75">
+          <div className="flex items-center gap-4 mb-4">
+            <AcademicCapIcon className="w-8 h-8 text-yellow-500" />
+            <div className="flex justify-between items-center flex-1">
+              <h2 className="text-xl font-semibold">Quiz</h2>
+              <span className="text-sm bg-yellow-600 text-white px-2 py-1 rounded">
+                Coming Soon
+              </span>
             </div>
           </div>
-        ))}
+          <p className="text-gray-400">
+            Test your knowledge with multiple choice questions and written answers.
+            Challenge yourself with timed quizzes and track your progress.
+          </p>
+        </div>
       </div>
     </div>
   )

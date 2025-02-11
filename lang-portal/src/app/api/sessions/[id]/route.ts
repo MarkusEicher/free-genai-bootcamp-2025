@@ -7,18 +7,28 @@ export async function GET(
 ) {
   try {
     const decodedId = decodeURIComponent(params.id)
-    const sessionDate = new Date(decodedId)
+    let sessionDate: Date
 
-    if (isNaN(sessionDate.getTime())) {
+    try {
+      sessionDate = new Date(decodedId)
+      // Validate the date and ensure it's not NaN
+      if (isNaN(sessionDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid session ID format' },
+          { status: 400 }
+        )
+      }
+    } catch (error) {
       return NextResponse.json(
         { error: 'Invalid session ID format' },
         { status: 400 }
       )
     }
-    
+
     // Get the minute range for the session
     const sessionStart = new Date(sessionDate)
-    const sessionEnd = new Date(sessionDate.getTime() + 60000) // Add 1 minute
+    sessionStart.setSeconds(0, 0) // Round to minute start
+    const sessionEnd = new Date(sessionStart.getTime() + 60000) // Add 1 minute
 
     const activities = await prisma.activity.findMany({
       where: {
@@ -61,9 +71,9 @@ export async function GET(
     })
 
     const sessionData = {
-      id: decodedId,
+      id: sessionStart.toISOString(), // Use consistent ISO format
       type: activities[0].type || 'Study Session',
-      createdAt: activities[0].createdAt.toISOString(),
+      createdAt: sessionStart.toISOString(),
       groupName: activities[0].word?.group?.name || 'No Group',
       words: Array.from(wordsMap.values())
     }

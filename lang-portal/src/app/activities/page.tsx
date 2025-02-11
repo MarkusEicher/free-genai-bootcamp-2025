@@ -3,78 +3,108 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-interface Word {
-  text: string
-  translation: string
-  group?: {
-    name: string
-  } | null
-}
-
-interface Activity {
+interface Session {
   id: string
   type: string
-  wordId: string
-  success: boolean
   createdAt: string
-  word: Word | null
+  wordCount: number
+  successRate: number
+  groupName: string
 }
 
 export default function ActivitiesPage() {
-  const [activities, setActivities] = useState<Activity[]>([])
+  const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchActivities = async () => {
+    const fetchSessions = async () => {
       try {
-        const response = await fetch('/api/activities')
-        if (!response.ok) throw new Error('Failed to fetch')
+        const response = await fetch('/api/sessions')
+        if (!response.ok) throw new Error('Failed to fetch sessions')
         const data = await response.json()
-        setActivities(data.data)
+        setSessions(data.data)
       } catch (err) {
+        console.error('Error:', err)
         setError('Failed to load activities')
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchActivities()
+    fetchSessions()
   }, [])
 
-  if (isLoading) return <div>Loading...</div>
-  if (error) return <div>Error: {error}</div>
+  if (isLoading) return <div className="p-4">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>
 
   return (
-    <div className="p-4">
+    <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Study Activities</h1>
-        <Link 
-          href="/study" 
+        <h1 className="text-2xl font-bold">Learning Activities</h1>
+        <Link
+          href="/study"
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          Start New Study Session
+          Start Learning
         </Link>
       </div>
-      <div className="space-y-4">
-        {activities.map((activity: Activity) => (
-          <div key={activity.id} className="p-4 bg-gray-800 rounded-lg">
-            <div className="flex justify-between">
-              <div>
-                <span className="text-lg">{activity.word?.text || 'Unknown'}</span>
-                <span className="mx-2">→</span>
-                <span>{activity.word?.translation || 'Unknown'}</span>
+
+      <div className="bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700">
+          <div className="text-gray-400 font-medium">DATE</div>
+          <div className="text-gray-400 font-medium">TYPE</div>
+          <div className="text-gray-400 font-medium">GROUP</div>
+          <div className="text-gray-400 font-medium">WORDS</div>
+          <div className="text-gray-400 font-medium">SUCCESS RATE</div>
+        </div>
+        {sessions.map((session) => {
+          const sessionId = encodeURIComponent(session.id)
+          return (
+            <Link
+              key={session.id}
+              href={`/sessions/${sessionId}`}
+              className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700 hover:bg-gray-700"
+            >
+              <div>{new Date(session.createdAt).toLocaleString()}</div>
+              <div className="capitalize">{session.type}</div>
+              <div>{session.groupName}</div>
+              <div>{session.wordCount} words</div>
+              <div className={session.successRate >= 70 ? 'text-green-500' : 'text-yellow-500'}>
+                {session.successRate}%
               </div>
-              <div className={activity.success ? 'text-green-500' : 'text-red-500'}>
-                {activity.success ? '✓' : '✗'}
-              </div>
-            </div>
-            <div className="text-sm text-gray-400 mt-2">
-              {new Date(activity.createdAt).toLocaleString()}
-              {activity.word?.group && ` • ${activity.word.group.name}`}
-            </div>
+            </Link>
+          )
+        })}
+        {sessions.length === 0 && (
+          <div className="p-4 text-center text-gray-400">
+            No learning activities yet. Start studying to track your progress!
           </div>
-        ))}
+        )}
+      </div>
+
+      <div className="mt-8 bg-gray-800 p-6 rounded-lg">
+        <h2 className="text-xl font-bold mb-4">Activity Types</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="p-4 bg-gray-700 rounded-lg">
+            <h3 className="font-semibold mb-2">Flashcards</h3>
+            <p className="text-gray-400">
+              Practice your vocabulary with interactive flashcards. Test your knowledge of German words and their English translations.
+            </p>
+          </div>
+          <div className="p-4 bg-gray-700 rounded-lg">
+            <h3 className="font-semibold mb-2">Group Study</h3>
+            <p className="text-gray-400">
+              Study words organized by groups. Focus on specific categories or themes to improve your vocabulary.
+            </p>
+          </div>
+          <div className="p-4 bg-gray-700 rounded-lg">
+            <h3 className="font-semibold mb-2">Progress Tracking</h3>
+            <p className="text-gray-400">
+              Monitor your learning progress with detailed statistics and success rates for each study session.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

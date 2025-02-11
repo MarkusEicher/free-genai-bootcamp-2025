@@ -19,13 +19,31 @@ export async function GET() {
 
     // Group activities by timestamp (rounded to the nearest minute to group related activities)
     const sessions = activities.reduce((acc, activity) => {
-      const timestamp = new Date(activity.createdAt).toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
-      if (!acc.has(timestamp)) {
-        acc.set(timestamp, [])
+      const timestamp = new Date(activity.createdAt)
+      // Round to nearest minute
+      timestamp.setSeconds(0, 0)
+      const key = timestamp.toISOString()
+      
+      if (!acc.has(key)) {
+        acc.set(key, {
+          id: key,
+          type: activity.type,
+          createdAt: key,
+          activities: [],
+          groupName: activity.word?.group?.name || 'No Group',
+          groupId: activity.word?.group?.id
+        })
       }
-      acc.get(timestamp)?.push(activity)
+      acc.get(key)?.activities.push(activity)
       return acc
-    }, new Map<string, any[]>())
+    }, new Map<string, any>())
+
+    // Get the most recent session
+    const lastSession = sessions.size > 0 ? {
+      ...Array.from(sessions.values())[0],
+      totalWords: Array.from(sessions.values())[0].activities.length,
+      successfulWords: Array.from(sessions.values())[0].activities.filter((a: any) => a.success).length
+    } : null
 
     // Calculate total statistics
     const totalWords = await prisma.word.count()
@@ -39,12 +57,24 @@ export async function GET() {
       ? Math.round((successfulAttempts / totalAttempts) * 100)
       : 0
 
+    // Format the last session data ensuring id is included
+    const formattedLastSession = lastSession ? {
+      id: lastSession.id,
+      type: lastSession.type || 'Study Session',
+      createdAt: lastSession.createdAt,
+      groupName: lastSession.groupName,
+      totalWords: lastSession.totalWords,
+      successfulWords: lastSession.successfulWords,
+      successRate: Math.round((lastSession.successfulWords / lastSession.totalWords) * 100)
+    } : null
+
     return NextResponse.json({
       data: {
         totalWords,
         totalGroups,
         studySessions: sessionCount,
-        successRate
+        successRate,
+        lastSession: formattedLastSession
       }
     })
   } catch (error) {

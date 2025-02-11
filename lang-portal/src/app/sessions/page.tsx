@@ -51,8 +51,11 @@ export default function SessionsPage() {
           <div className="text-gray-400 font-medium">SUCCESS RATE</div>
         </div>
         {sessions.map((session) => {
-          // Format the session ID to ensure it's URL-safe
-          const sessionId = encodeURIComponent(session.id)
+          // Create a date object and format it consistently
+          const sessionDate = new Date(session.createdAt)
+          sessionDate.setSeconds(0, 0)
+          const sessionId = encodeURIComponent(sessionDate.toISOString())
+          
           return (
             <Link
               key={session.id}
@@ -60,7 +63,7 @@ export default function SessionsPage() {
               className="grid grid-cols-5 gap-4 p-4 border-b border-gray-700 hover:bg-gray-700"
             >
               <div>{new Date(session.createdAt).toLocaleString()}</div>
-              <div>{session.type}</div>
+              <div className="capitalize">{session.type}</div>
               <div>{session.groupName}</div>
               <div>{session.wordCount} words</div>
               <div className={session.successRate >= 70 ? 'text-green-500' : 'text-yellow-500'}>
