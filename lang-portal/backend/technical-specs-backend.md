@@ -295,3 +295,31 @@ List of endpoints:
 - GET /sessions/{session_id}/last_activity_name: Requires joining sessions, activity_reviews, and activities.
 - GET /sessions/{session_id}/last_activity_score: Requires joining sessions, activity_reviews, and activity_review_items.
 
+Additional Endpoints to be added:
+
+GET /dashboard/stats
+- Returns aggregated stats for quick view
+- Include: overall_score, total_sessions, streak, words_practiced, words_remaining
+
+GET /dashboard/last_session
+- Returns formatted last session data for dashboard
+- Include: date, activities, scores
+
+POST /settings
+- Store user preferences
+- Include: theme, notifications
+
+POST /reset
+- Reset session history and reviews
+
+GET /vocabulary/progress
+- Return vocabulary learning progress
+- Include: practiced_count, remaining_count, percentage
+
+POST /reset
+- Purpose: Reset all learning history
+- Affects tables:
+  - sessions
+  - session_streaks
+  - activity_reviews
+  - activity_review_items
