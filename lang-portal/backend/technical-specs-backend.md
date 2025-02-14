@@ -91,6 +91,7 @@ CREATE TABLE vocabulary_vocabulary_group (
     FOREIGN KEY (vocabulary_group_id) REFERENCES vocabulary_groups(vocabulary_group_id),
     PRIMARY KEY (vocabulary_id, vocabulary_group_id) -- Composite key to prevent duplicates
 );
+```
 
 ```mermaid
 erDiagram
