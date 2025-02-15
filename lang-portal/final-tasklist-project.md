@@ -16,8 +16,8 @@
 - [x] Setup basic FastAPI application
 - [x] Setup Swagger UI (comes with FastAPI)
 - [x] Create API documentation structure (created api.md)
-- [ ] Configure database connection
-- [ ] Setup backend test environment
+- [x] Configure database connection
+- [x] Setup backend test environment
 
 ### 1.3 Frontend Setup
 - [ ] Create Vite React project
