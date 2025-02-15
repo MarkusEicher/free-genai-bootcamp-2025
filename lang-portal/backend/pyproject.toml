@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "lang-portal-backend"
+version = "0.1.0"
+description = "Language Learning Portal Backend"
+authors = ["Your Name <your.email@example.com>"]
+packages = [
+    { include = "app" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.8.1,<4.0"
+fastapi = "^0.104.0"
+uvicorn = "^0.24.0"
+sqlalchemy = "^2.0.23"
+alembic = "^1.12.1"
+pydantic = "^2.4.2"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+black = "^23.10.1"
+flake8 = "^6.1.0"
+mypy = "^1.6.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

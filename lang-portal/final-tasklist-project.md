@@ -11,8 +11,8 @@
 - [x] Create code review checklist
 
 ### 1.2 Backend Setup
-- [ ] Create virtual environment
-- [ ] Install FastAPI and dependencies
+- [x] Create virtual environment
+- [x] Install FastAPI and dependencies
 - [ ] Setup basic FastAPI application
 - [ ] Configure database connection
 - [ ] Setup Swagger UI
