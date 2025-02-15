@@ -14,6 +14,7 @@ from app.models.vocabulary import Vocabulary
 from app.models.language import Language
 from app.models.language_pair import LanguagePair
 from app.models.vocabulary_group import VocabularyGroup
+from app.models.progress import VocabularyProgress
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

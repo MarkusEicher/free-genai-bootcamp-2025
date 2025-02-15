@@ -19,21 +19,21 @@
 - [x] Create API documentation
 
 ### 1.2.1 Language and Vocabulary Structure
-- [ ] Add language model and endpoints
-  - [ ] Create language pairs model
-  - [ ] Add CRUD endpoints for languages
-  - [ ] Update vocabulary model with language pair reference
+- [x] Add language model and endpoints
+  - [x] Create language pairs model
+  - [x] Add CRUD endpoints for languages
+  - [x] Update vocabulary model with language pair reference
 
-- [ ] Add vocabulary grouping
-  - [ ] Create vocabulary group model
-  - [ ] Add CRUD endpoints for groups
-  - [ ] Update vocabulary model with group reference
+- [x] Add vocabulary grouping
+  - [x] Create vocabulary group model
+  - [x] Add CRUD endpoints for groups
+  - [x] Update vocabulary model with group reference
 
 ### 1.2.2 Learning Progress
-- [ ] Add progress tracking
-  - [ ] Create progress model (correct/incorrect attempts)
-  - [ ] Add endpoints for recording attempts
-  - [ ] Add endpoints for retrieving progress
+- [x] Add progress tracking
+  - [x] Create progress model (correct/incorrect attempts)
+  - [x] Add endpoints for recording attempts
+  - [x] Add endpoints for retrieving progress
 
 - [ ] Add learning statistics
   - [ ] Create statistics endpoints
