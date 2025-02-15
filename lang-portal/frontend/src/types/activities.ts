@@ -12,6 +12,8 @@ export interface Activity {
   completedSteps?: number
   totalSteps?: number
   steps?: ActivityStep[]
+  date: string
+  details?: string
 }
 
 export interface ActivityStats {

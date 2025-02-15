@@ -1,43 +1,68 @@
 import { Line } from 'react-chartjs-2'
-import type { ProgressDataPoint } from '../types/dashboard'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js'
 
-interface ProgressChartProps {
-  data: ProgressDataPoint[]
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+)
+
+interface ProgressData {
+  labels: string[]
+  datasets: {
+    label: string
+    data: number[]
+    borderColor: string
+    backgroundColor: string
+  }[]
 }
 
-export function ProgressChart({ data }: ProgressChartProps) {
-  const chartData = {
-    labels: data.map(d => new Date(d.date).toLocaleDateString()),
+export default function ProgressChart() {
+  const data: ProgressData = {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     datasets: [
       {
-        label: 'Mastered Words',
-        data: data.map(d => d.masteredWords),
+        label: 'Words Learned',
+        data: [12, 19, 3, 5, 2, 3, 15],
         borderColor: 'rgb(59, 130, 246)',
-        tension: 0.1
+        backgroundColor: 'rgba(59, 130, 246, 0.5)',
       },
-      {
-        label: 'Total Words',
-        data: data.map(d => d.totalWords),
-        borderColor: 'rgb(156, 163, 175)',
-        tension: 0.1
-      }
-    ]
+    ],
+  }
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+    },
   }
 
   return (
-    <div className="h-64">
-      <Line
-        data={chartData}
-        options={{
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true
-            }
-          }
-        }}
-      />
+    <div className="w-full h-64">
+      <Line options={options} data={data} />
     </div>
   )
 } 

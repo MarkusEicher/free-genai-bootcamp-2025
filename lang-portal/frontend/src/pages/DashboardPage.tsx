@@ -1,79 +1,67 @@
-import { Card } from '../components/common'
-import { useDashboardStats, useRecentActivity } from '../hooks/useApi'
-import { ProgressChart } from '../components/ProgressChart'
-import { ActivityFeed } from '../components/ActivityFeed'
-import { LearningStreak } from '../components/LearningStreak'
+import { useStats } from '../hooks/useApi'
+import LoadingState from '../components/LoadingState'
+import Card from '../components/Card'
+import ProgressChart from '../components/charts/ProgressChart'
+import StreakCalendar from '../components/charts/StreakCalendar'
+import StatsCard from '../components/StatsCard'
+
+interface ProgressHistory {
+  date: string
+  wordsLearned: number
+  successRate: number
+}
 
 export default function DashboardPage() {
-  const { data: stats, isLoading: statsLoading } = useDashboardStats()
-  const { data: activity, isLoading: activityLoading } = useRecentActivity()
+  const { data: stats, isLoading } = useStats()
 
-  if (statsLoading || activityLoading) return <div>Loading...</div>
+  if (isLoading) {
+    return <LoadingState />
+  }
+
+  const progressData = {
+    dates: stats?.progressHistory.map((h: ProgressHistory) => h.date) || [],
+    wordsLearned: stats?.progressHistory.map((h: ProgressHistory) => h.wordsLearned) || [],
+    successRate: stats?.progressHistory.map((h: ProgressHistory) => h.successRate) || []
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Overall Progress</h2>
-          <div className="space-y-4">
-            <div>
-              <div className="text-sm text-gray-500">Words Mastered</div>
-              <div className="text-2xl font-bold">{stats?.masteredWords || 0}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Total Words</div>
-              <div className="text-2xl font-bold">{stats?.totalWords || 0}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Mastery Rate</div>
-              <div className="text-2xl font-bold">
-                {stats?.masteryRate ? `${Math.round(stats.masteryRate)}%` : '0%'}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Learning Streak</h2>
-          <LearningStreak
-            currentStreak={stats?.currentStreak || 0}
-            longestStreak={stats?.longestStreak || 0}
-            lastActivity={stats?.lastActivityDate}
-          />
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Practice Stats</h2>
-          <div className="space-y-4">
-            <div>
-              <div className="text-sm text-gray-500">Total Sessions</div>
-              <div className="text-2xl font-bold">{stats?.totalSessions || 0}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Average Accuracy</div>
-              <div className="text-2xl font-bold">
-                {stats?.averageAccuracy ? `${Math.round(stats.averageAccuracy)}%` : '0%'}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Time Practiced</div>
-              <div className="text-2xl font-bold">{stats?.totalPracticeTime || 0} min</div>
-            </div>
-          </div>
-        </Card>
+    <div className="container mx-auto p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatsCard
+          title="Words Learned"
+          value={stats?.wordsLearned || 0}
+          description="Total words mastered"
+          trend={5}
+        />
+        <StatsCard
+          title="Current Streak"
+          value={`${stats?.currentStreak || 0} days`}
+          description="Keep practicing!"
+          trend={0}
+        />
+        <StatsCard
+          title="Success Rate"
+          value={`${Math.round(stats?.successRate || 0)}%`}
+          description="Average correct answers"
+          trend={2}
+        />
+        <StatsCard
+          title="Practice Time"
+          value={`${stats?.totalMinutes || 0} min`}
+          description="Total time learning"
+          trend={10}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Progress Over Time</h2>
-          <ProgressChart data={stats?.progressData || []} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-4">
+          <h2 className="text-lg font-medium mb-4">Learning Progress</h2>
+          <ProgressChart data={progressData} />
         </Card>
 
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Recent Activity</h2>
-          <ActivityFeed activities={activity || []} />
+        <Card className="p-4">
+          <h2 className="text-lg font-medium mb-4">Practice Streak</h2>
+          <StreakCalendar data={stats?.streakData || []} />
         </Card>
       </div>
     </div>

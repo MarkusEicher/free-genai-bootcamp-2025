@@ -1,156 +1,156 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Card, Button, LoadingSpinner } from '../components/common'
-import VocabularyList from '../components/vocabulary/VocabularyList'
-import { useVocabularyStats, useVocabularyGroups, useCreateVocabularyGroup } from '../hooks/useApi'
-import type { VocabularyGroup } from '../types/vocabulary'
+import { useVocabulary } from '../hooks/useApi'
+import LoadingState from '../components/LoadingState'
+import Button from '../components/Button'
+import Card from '../components/Card'
+
+interface VocabularyGroup {
+  id: number
+  name: string
+  description?: string
+  wordCount: number
+}
+
+interface VocabularyItem {
+  id: number
+  word: string
+  translation: string
+  groupId?: number
+}
 
 export default function VocabularyPage() {
-  const navigate = useNavigate()
-  const { data: stats } = useVocabularyStats()
-  const [isCreating, setIsCreating] = useState(false)
-  const [newGroupName, setNewGroupName] = useState('')
-  const { data: groups, isLoading } = useVocabularyGroups()
-  const createMutation = useCreateVocabularyGroup()
+  const [selectedGroup, setSelectedGroup] = useState<number | null>(null)
+  const [newWord, setNewWord] = useState('')
+  const [newTranslation, setNewTranslation] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
-  const handleCreateGroup = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newGroupName.trim()) return
+  const { data: vocabulary, isLoading } = useVocabulary()
+  
+  // Temporary mock data for groups until API is ready
+  const groups: VocabularyGroup[] = [
+    { id: 1, name: 'Basics', wordCount: 50 },
+    { id: 2, name: 'Advanced', wordCount: 30 },
+  ]
 
-    try {
-      await createMutation.mutateAsync({ name: newGroupName })
-      setNewGroupName('')
-      setIsCreating(false)
-    } catch (error) {
-      console.error('Failed to create group:', error)
-    }
+  if (isLoading) {
+    return <LoadingState />
   }
 
-  if (isLoading) return <LoadingSpinner />
+  const filteredVocabulary = vocabulary?.filter((item: VocabularyItem) => 
+    (!selectedGroup || item.groupId === selectedGroup) &&
+    (item.word.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     item.translation.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Header Section */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Vocabulary</h1>
-        <Button onClick={() => navigate('/vocabulary/new')}>
-          Add New Word
-        </Button>
-      </div>
-
-      {/* Stats Overview */}
+    <div className="container mx-auto p-4">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="text-sm text-gray-500">Total Words</div>
-          <div className="text-2xl font-bold">{stats?.totalWords || 0}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-sm text-gray-500">Mastered</div>
-          <div className="text-2xl font-bold text-green-600">
-            {stats?.masteredWords || 0}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-sm text-gray-500">In Progress</div>
-          <div className="text-2xl font-bold text-yellow-600">
-            {stats?.inProgressWords || 0}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-sm text-gray-500">To Review</div>
-          <div className="text-2xl font-bold text-red-600">
-            {stats?.toReviewWords || 0}
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Button
-          variant="secondary"
-          onClick={() => navigate('/vocabulary/practice')}
-          className="w-full"
-        >
-          Practice Words
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => navigate('/vocabulary/groups')}
-          className="w-full"
-        >
-          Manage Groups
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => navigate('/vocabulary/review')}
-          className="w-full"
-        >
-          Review Due Words
-        </Button>
-      </div>
-
-      {/* Main Vocabulary List */}
-      <VocabularyList
-        onItemClick={(id) => navigate(`/vocabulary/${id}`)}
-        showGroups={true}
-      />
-
-      {isCreating && (
-        <Card className="p-6">
-          <form onSubmit={handleCreateGroup} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Group Name
-              </label>
-              <input
-                type="text"
-                value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-                className="mt-1 w-full p-2 border rounded-lg"
-                placeholder="Enter group name..."
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsCreating(false)}
+        {/* Sidebar with groups */}
+        <div className="md:col-span-1">
+          <Card className="p-4">
+            <h2 className="text-lg font-medium mb-4">Groups</h2>
+            <div className="space-y-2">
+              <button
+                onClick={() => setSelectedGroup(null)}
+                className={`w-full text-left px-3 py-2 rounded ${
+                  selectedGroup === null ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'
+                }`}
               >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending || !newGroupName.trim()}
-              >
-                Create Group
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {groups?.map((group: VocabularyGroup) => (
-          <Card
-            key={group.id}
-            className="p-6 hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => window.location.href = `/vocabulary/${group.id}`}
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-medium">{group.name}</h3>
-                <p className="text-sm text-gray-500">
-                  {group.wordCount} words
-                </p>
-              </div>
-              <div className="text-sm text-gray-500">
-                Last updated: {new Date(group.updatedAt).toLocaleDateString()}
-              </div>
+                All Words
+              </button>
+              {groups.map((group: VocabularyGroup) => (
+                <button
+                  key={group.id}
+                  onClick={() => setSelectedGroup(group.id)}
+                  className={`w-full text-left px-3 py-2 rounded ${
+                    selectedGroup === group.id ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {group.name}
+                  <span className="text-sm text-gray-500 ml-2">
+                    ({group.wordCount})
+                  </span>
+                </button>
+              ))}
             </div>
           </Card>
-        ))}
+        </div>
+
+        {/* Main content */}
+        <div className="md:col-span-3">
+          <Card className="p-4 mb-4">
+            <form className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="text"
+                value={newWord}
+                onChange={(e) => setNewWord(e.target.value)}
+                placeholder="New word"
+                className="p-2 border rounded"
+              />
+              <input
+                type="text"
+                value={newTranslation}
+                onChange={(e) => setNewTranslation(e.target.value)}
+                placeholder="Translation"
+                className="p-2 border rounded"
+              />
+              <Button type="submit">Add Word</Button>
+            </form>
+          </Card>
+
+          <Card className="p-4">
+            <div className="mb-4">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search vocabulary..."
+                className="w-full p-2 border rounded"
+              />
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Word
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Translation
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Group
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredVocabulary?.map((item: VocabularyItem) => (
+                    <tr key={item.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">{item.word}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{item.translation}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {groups.find((g: VocabularyGroup) => g.id === item.groupId)?.name || 'Ungrouped'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Button
+                          variant="secondary"
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   )
-} 
+}

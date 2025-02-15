@@ -1,113 +1,98 @@
 import { useState } from 'react'
-import { Card, Button } from '../components/common'
-import { PracticeModes } from '../components/PracticeModes'
-import { useVocabularyWords, usePracticeSession } from '../hooks/useApi'
-import type { VocabularyWord } from '../types/vocabulary'
-import type { PracticeMode } from '../components/PracticeModes'
+import { useStartPractice } from '../hooks/useApi'
+import { useStatsContext } from '../contexts/StatsContext'
+import LoadingState from '../components/LoadingState'
+import Button from '../components/Button'
+import Card from '../components/Card'
+import PracticeSession from '../components/PracticeSession'
+
+type PracticeMode = 'flashcard' | 'typing' | 'multipleChoice'
+
+interface PracticeConfig {
+  mode: PracticeMode
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  wordCount: number
+}
 
 export default function PracticePage() {
-  const { data: words, isLoading } = useVocabularyWords()
-  const practiceMutation = usePracticeSession()
-  const [selectedMode, setSelectedMode] = useState<PracticeMode | null>(null)
-  const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner')
+  const [config, setConfig] = useState<PracticeConfig | null>(null)
+  const [session, setSession] = useState<{
+    questions: Array<{
+      id: number
+      word: string
+      translation: string
+      options?: string[]
+    }>
+  } | null>(null)
 
-  const handleStartPractice = async () => {
-    if (!selectedMode) return
-    
-    try {
-      await practiceMutation.mutateAsync({
-        mode: selectedMode,
-        difficulty,
-        wordIds: words?.map((w: VocabularyWord) => w.id) || []
-      })
-      setSelectedMode(null)
-    } catch (error) {
-      console.error('Failed to start practice session:', error)
-    }
+  const startPractice = useStartPractice()
+  const { updateStats } = useStatsContext()
+
+  const handleStart = async (mode: PracticeMode) => {
+    setConfig({
+      mode,
+      difficulty: 'beginner',
+      wordCount: 10
+    })
+    await startPractice.mutateAsync({
+      type: mode,
+      difficulty: 'beginner',
+      wordCount: 10
+    })
   }
 
-  if (isLoading) return <div>Loading...</div>
+  const handleComplete = ({ correct, total }: { correct: number; total: number }) => {
+    updateStats({
+      correct,
+      total,
+      type: config?.mode || 'practice'
+    })
+    setSession(null)
+    setConfig(null)
+  }
+
+  if (startPractice.isPending) {
+    return <LoadingState />
+  }
+
+  if (session) {
+    return (
+      <PracticeSession
+        mode={config!.mode}
+        questions={session.questions}
+        onComplete={handleComplete}
+        onExit={() => setSession(null)}
+      />
+    )
+  }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-bold">Practice</h1>
-
-      {!selectedMode ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-medium mb-4">Select Practice Mode</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Difficulty Level
-              </label>
-              <select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value as typeof difficulty)}
-                className="w-full p-2 border rounded"
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
+    <div className="container mx-auto p-4">
+      <Card className="p-6">
+        <h2 className="text-lg font-medium mb-4">Select Practice Mode</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Button onClick={() => handleStart('flashcard')} className="h-32">
+            <div className="text-xl mb-2">Flashcards</div>
+            <div className="text-sm text-gray-600">
+              Review words with simple flashcards
             </div>
+          </Button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                onClick={() => {
-                  setSelectedMode('flashcard')
-                  handleStartPractice()
-                }}
-                className="h-32"
-              >
-                <div className="text-xl mb-2">Flashcards</div>
-                <div className="text-sm text-gray-600">
-                  Review words with simple flashcards
-                </div>
-              </Button>
-
-              <Button
-                onClick={() => setSelectedMode('typing')}
-                className="h-32"
-              >
-                <div className="text-xl mb-2">Typing Practice</div>
-                <div className="text-sm text-gray-600">
-                  Practice spelling and typing
-                </div>
-              </Button>
-
-              <Button
-                onClick={() => setSelectedMode('multipleChoice')}
-                className="h-32"
-              >
-                <div className="text-xl mb-2">Multiple Choice</div>
-                <div className="text-sm text-gray-600">
-                  Test your knowledge with options
-                </div>
-              </Button>
-
-              <Button
-                onClick={() => setSelectedMode('listening')}
-                className="h-32"
-              >
-                <div className="text-xl mb-2">Listening Practice</div>
-                <div className="text-sm text-gray-600">
-                  Improve your listening skills
-                </div>
-              </Button>
+          <Button onClick={() => handleStart('typing')} className="h-32">
+            <div className="text-xl mb-2">Typing Practice</div>
+            <div className="text-sm text-gray-600">
+              Practice spelling and typing
             </div>
-          </div>
-        </Card>
-      ) : (
-        <PracticeModes
-          words={words || []}
-          mode={selectedMode}
-          difficulty={difficulty}
-          onComplete={(results) => {
-            console.log('Practice completed:', results)
-            setSelectedMode(null)
-          }}
-        />
-      )}
+          </Button>
+
+          <Button onClick={() => handleStart('multipleChoice')} className="h-32">
+            <div className="text-xl mb-2">Multiple Choice</div>
+            <div className="text-sm text-gray-600">
+              Test your knowledge with options
+            </div>
+          </Button>
+        </div>
+      </Card>
     </div>
   )
 } 

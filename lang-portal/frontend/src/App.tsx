@@ -1,27 +1,17 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import HomePage from './pages/HomePage'
-import ProfilePage from './pages/ProfilePage'
-import PracticePage from './pages/PracticePage'
-import LeaderboardPage from './pages/LeaderboardPage'
-// import SettingsPage from './pages/SettingsPage'  // Comment out import
-import Layout from './components/Layout'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './hooks/useApi'
+import { StatsProvider } from './contexts/StatsContext'
+import { NotificationProvider } from './contexts/NotificationContext'
+import Router from './Router'
 
-function App() {
+export default function App() {
   return (
-    <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/practice" element={<PracticePage />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          {/* Remove or comment out settings route
-          <Route path="/settings" element={<SettingsPage />} /> 
-          */}
-        </Routes>
-      </Layout>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <NotificationProvider>
+        <StatsProvider>
+          <Router />
+        </StatsProvider>
+      </NotificationProvider>
+    </QueryClientProvider>
   )
 }
-
-export default App

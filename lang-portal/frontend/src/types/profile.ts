@@ -1,13 +1,11 @@
 export interface UserProfile {
   id: number
-  displayName: string
-  bio?: string
-  nativeLanguage: string
-  learningLanguages: string[]
+  name: string
+  email: string
   dailyGoal: number
-  publicProfile: boolean
+  level: string
   createdAt: string
   updatedAt: string
 }
 
-export type UpdateProfileData = Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'> 
+export type UpdateProfileData = Partial<Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'>> 

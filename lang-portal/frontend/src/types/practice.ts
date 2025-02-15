@@ -10,16 +10,12 @@ export interface WordProgress {
 
 export interface PracticeSession {
   id: number
-  date: string
-  mode: 'typing' | 'multipleChoice' | 'flashcard'
-  words: number[]
-  results: {
-    wordId: number
-    correct: boolean
-    timeSpent: number
-  }[]
-  totalTime: number
+  type: 'vocabulary' | 'grammar' | 'listening'
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  progress: number
   score: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface PracticeResults {
@@ -32,4 +28,18 @@ export interface PracticeResults {
     correct: boolean
     timeSpent: number
   }[]
+}
+
+export interface PracticeQuestion {
+  id: number
+  question: string
+  correctAnswer: string
+  options?: string[]
+  type: 'multiple-choice' | 'text-input'
+}
+
+export interface PracticeResult {
+  correct: boolean
+  correctAnswer: string
+  explanation?: string
 } 

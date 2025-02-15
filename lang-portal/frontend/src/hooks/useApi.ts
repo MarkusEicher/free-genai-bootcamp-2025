@@ -5,6 +5,7 @@ import { sessionsApi } from '../api/sessions'
 import { Activity } from '../types/activities'
 import { Goal } from '../types/goals'
 import type { UserProfile, UpdateProfileData } from '../types/profile'
+import { api } from '../lib/api'
 
 export const queryClient = new QueryClient()
 
@@ -812,5 +813,21 @@ export function useCheckAnswer() {
       if (!response.ok) throw new Error('Failed to check answer')
       return response.json()
     }
+  })
+}
+
+export function useUpdateStats() {
+  return useMutation({
+    mutationFn: (stats: {
+      wordsLearned: number
+      currentStreak: number
+      successRate: number
+      totalMinutes: number
+      recentActivity: Array<{
+        type: string
+        date: string
+        details: string
+      }>
+    }) => api.put('/stats', stats)
   })
 }

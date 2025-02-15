@@ -1,33 +1,45 @@
-import { useNavigate } from 'react-router-dom'
-import { Card, Button } from '../components/common'
+import { useProfile, useStats } from '../hooks/useApi'
+import LoadingState from '../components/LoadingState'
+import ProgressChart from '../components/ProgressChart'
+import type { Activity } from '../types/activities'
 
 export default function HomePage() {
-  const navigate = useNavigate()
+  const { data: profile, isLoading: profileLoading } = useProfile()
+  const { data: stats, isLoading: statsLoading } = useStats()
+
+  if (profileLoading || statsLoading) {
+    return <LoadingState />
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <h1 className="text-3xl font-bold mb-6">Welcome to Language Portal</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Welcome, {profile?.name}</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Activities</h2>
-          <p className="text-gray-600 mb-4">
-            Practice your language skills with interactive exercises
-          </p>
-          <Button onClick={() => navigate('/activities')}>
-            View Activities
-          </Button>
-        </Card>
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold mb-4">Your Progress</h2>
+        <ProgressChart />
+      </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Vocabulary</h2>
-          <p className="text-gray-600 mb-4">
-            Manage and learn new vocabulary words
-          </p>
-          <Button onClick={() => navigate('/vocabulary')}>
-            View Vocabulary
-          </Button>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 bg-white rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Today's Goals</h2>
+          <p>Daily practice goal: {profile?.dailyGoal || 0} minutes</p>
+          <p>Progress: {stats?.todayMinutes || 0} minutes</p>
+        </div>
+
+        <div className="p-4 bg-white rounded shadow">
+          <h2 className="text-lg font-semibold mb-2">Recent Activity</h2>
+          <div className="space-y-2">
+            {stats?.recentActivity?.map((activity: Activity, index: number) => (
+              <div key={index} className="flex justify-between items-center">
+                <span>{activity.type}</span>
+                <span className="text-gray-500">
+                  {new Date(activity.date).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
