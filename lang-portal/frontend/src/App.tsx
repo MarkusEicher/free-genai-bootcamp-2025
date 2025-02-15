@@ -1,34 +1,35 @@
-import { Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from './hooks/useApi'
-import { Layout, LoadingSpinner } from './components/common'
-import { routes } from './routes/routes'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Navbar } from './components/common'
+import {
+  HomePage,
+  ActivityPage,
+  ActivityNewPage,
+  ActivityDetailsPage,
+  ActivityEditPage,
+  ActivityPracticePage,
+  ActivityCompletePage
+} from './pages'
 
-function App() {
+const queryClient = new QueryClient()
+
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Layout>
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              {routes.map(({ path, element: Element }) => (
-                <Route
-                  key={path}
-                  path={path}
-                  element={<Element />}
-                />
-              ))}
-              <Route
-                path="*"
-                element={<div>404 - Page Not Found</div>}
-              />
-            </Routes>
-          </Suspense>
-        </Layout>
-      </BrowserRouter>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/activities" element={<ActivityPage />} />
+            <Route path="/activities/new" element={<ActivityNewPage />} />
+            <Route path="/activities/:id" element={<ActivityDetailsPage />} />
+            <Route path="/activities/:id/edit" element={<ActivityEditPage />} />
+            <Route path="/activities/:id/practice" element={<ActivityPracticePage />} />
+            <Route path="/activities/:id/complete" element={<ActivityCompletePage />} />
+          </Routes>
+        </div>
+      </Router>
     </QueryClientProvider>
   )
 }
-
-export default App

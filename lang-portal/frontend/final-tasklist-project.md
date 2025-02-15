@@ -225,13 +225,13 @@
 
 ## 4. Vocabulary System
 ### 4.1 Backend Implementation
-- [ ] Create vocabulary endpoints
-- [ ] Document endpoints in Swagger
-- [ ] Implement vocabulary group endpoints
-- [ ] Add search functionality
-- [ ] Write unit tests
-- [ ] Create API documentation
-- [ ] Perform integration tests
+- [x] Create vocabulary endpoints
+- [x] Document endpoints in Swagger
+- [x] Implement vocabulary group endpoints
+- [x] Add search functionality
+- [x] Write unit tests
+- [x] Create API documentation
+- [x] Perform integration tests
 
 ### 4.2 Frontend Implementation
 - [ ] Create vocabulary components
