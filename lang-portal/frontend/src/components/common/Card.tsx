@@ -1,6 +1,14 @@
-export default function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+import { ReactNode } from 'react'
+
+interface CardProps {
+  children: ReactNode
+  className?: string
+  onClick?: () => void
+}
+
+export default function Card({ children, className = '', onClick }: CardProps) {
   return (
-    <div className={`bg-white shadow rounded-lg p-6 ${className}`}>
+    <div onClick={onClick} className={`bg-white rounded-lg shadow ${className}`}>
       {children}
     </div>
   )

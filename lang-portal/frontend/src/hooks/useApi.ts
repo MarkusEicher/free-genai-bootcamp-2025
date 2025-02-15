@@ -1,8 +1,10 @@
-import { useQuery, useMutation, QueryClient } from '@tanstack/react-query'
+import { VocabularyItem } from '../types/vocabulary'
+import { useQuery, useMutation, QueryClient, useQueryClient } from '@tanstack/react-query'
 import { vocabularyApi } from '../api/vocabulary'
 import { sessionsApi } from '../api/sessions'
 import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
+import { Session } from '../types/session'
 
 export const queryClient = new QueryClient()
 
@@ -21,11 +23,66 @@ export const useVocabularyItem = (id: number) => {
   })
 }
 
+export function useCreateVocabulary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (newWord: Omit<VocabularyItem, 'id'>) => {
+      const response = await fetch('/api/vocabulary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWord),
+      })
+      if (!response.ok) throw new Error('Failed to create word')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary'] })
+    },
+  })
+}
+
+export function useUpdateVocabulary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (word: VocabularyItem) => {
+      const response = await fetch(`/api/vocabulary/${word.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(word),
+      })
+      if (!response.ok) throw new Error('Failed to update word')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary'] })
+    },
+  })
+}
+
+export function useDeleteVocabulary() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/vocabulary/${id}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete word')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary'] })
+    },
+  })
+}
+
 // Sessions hooks
-export const useSessions = () => {
-  return useQuery({
+export function useSessions() {
+  return useQuery<Session[]>({
     queryKey: ['sessions'],
-    queryFn: sessionsApi.getAll
+    queryFn: async () => {
+      const response = await fetch('/api/sessions')
+      if (!response.ok) throw new Error('Failed to fetch sessions')
+      return response.json()
+    },
   })
 }
 
