@@ -65,3 +65,4 @@ frontend/dist/
 *.db
 .env.*
 !.env.example 
+*storybook.log
