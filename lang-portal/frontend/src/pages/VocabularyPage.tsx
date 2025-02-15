@@ -1,15 +1,14 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useVocabulary } from '../hooks/useApi'
 import LoadingState from '../components/LoadingState'
 import Button from '../components/Button'
 import Card from '../components/Card'
-
-interface VocabularyGroup {
-  id: number
-  name: string
-  description?: string
-  wordCount: number
-}
+import Modal from '../components/Modal'
+import VocabularyImport from '../components/vocabulary/VocabularyImport'
+import VocabularyExport from '../components/vocabulary/VocabularyExport'
+import VocabularySearch from '../components/vocabulary/VocabularySearch'
+import { useNotification } from '../contexts/NotificationContext'
+import Pagination from '../components/Pagination'
 
 interface VocabularyItem {
   id: number
@@ -19,138 +18,139 @@ interface VocabularyItem {
 }
 
 export default function VocabularyPage() {
+  const [showImport, setShowImport] = useState(false)
+  const [showExport, setShowExport] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null)
-  const [newWord, setNewWord] = useState('')
-  const [newTranslation, setNewTranslation] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
-
-  const { data: vocabulary, isLoading } = useVocabulary()
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
-  // Temporary mock data for groups until API is ready
-  const groups: VocabularyGroup[] = [
-    { id: 1, name: 'Basics', wordCount: 50 },
-    { id: 2, name: 'Advanced', wordCount: 30 },
-  ]
+  const { data: vocabulary, isLoading, mutate } = useVocabulary()
+  const { showNotification } = useNotification()
 
-  if (isLoading) {
-    return <LoadingState />
+  const filteredVocabulary = useMemo(() => {
+    if (!vocabulary) return []
+
+    return vocabulary.filter((item: VocabularyItem) => {
+      const matchesSearch = searchQuery === '' || 
+        item.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.translation.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      const matchesGroup = selectedGroup === null || item.groupId === selectedGroup
+
+      return matchesSearch && matchesGroup
+    })
+  }, [vocabulary, searchQuery, selectedGroup])
+
+  const paginatedVocabulary = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredVocabulary.slice(startIndex, endIndex)
+  }, [filteredVocabulary, currentPage])
+
+  const totalPages = Math.ceil(filteredVocabulary.length / itemsPerPage)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedGroup])
+
+  const handleImport = async (data: Array<{ word: string; translation: string }>) => {
+    try {
+      // API call to import vocabulary
+      await mutate([...vocabulary, ...data])
+      showNotification('Vocabulary imported successfully', 'success')
+    } catch (error) {
+      showNotification('Failed to import vocabulary', 'error')
+    }
   }
 
-  const filteredVocabulary = vocabulary?.filter((item: VocabularyItem) => 
-    (!selectedGroup || item.groupId === selectedGroup) &&
-    (item.word.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     item.translation.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  if (isLoading) return <LoadingState />
 
   return (
     <div className="container mx-auto p-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Sidebar with groups */}
-        <div className="md:col-span-1">
-          <Card className="p-4">
-            <h2 className="text-lg font-medium mb-4">Groups</h2>
-            <div className="space-y-2">
-              <button
-                onClick={() => setSelectedGroup(null)}
-                className={`w-full text-left px-3 py-2 rounded ${
-                  selectedGroup === null ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'
-                }`}
-              >
-                All Words
-              </button>
-              {groups.map((group: VocabularyGroup) => (
-                <button
-                  key={group.id}
-                  onClick={() => setSelectedGroup(group.id)}
-                  className={`w-full text-left px-3 py-2 rounded ${
-                    selectedGroup === group.id ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  {group.name}
-                  <span className="text-sm text-gray-500 ml-2">
-                    ({group.wordCount})
-                  </span>
-                </button>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* Main content */}
-        <div className="md:col-span-3">
-          <Card className="p-4 mb-4">
-            <form className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
-                type="text"
-                value={newWord}
-                onChange={(e) => setNewWord(e.target.value)}
-                placeholder="New word"
-                className="p-2 border rounded"
-              />
-              <input
-                type="text"
-                value={newTranslation}
-                onChange={(e) => setNewTranslation(e.target.value)}
-                placeholder="Translation"
-                className="p-2 border rounded"
-              />
-              <Button type="submit">Add Word</Button>
-            </form>
-          </Card>
-
-          <Card className="p-4">
-            <div className="mb-4">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search vocabulary..."
-                className="w-full p-2 border rounded"
-              />
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Word
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Translation
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Group
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredVocabulary?.map((item: VocabularyItem) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">{item.word}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{item.translation}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {groups.find((g: VocabularyGroup) => g.id === item.groupId)?.name || 'Ungrouped'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Button
-                          variant="secondary"
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Vocabulary</h1>
+        <div className="space-x-4">
+          <Button onClick={() => setShowImport(true)} variant="secondary">
+            Import
+          </Button>
+          <Button onClick={() => setShowExport(true)} variant="secondary">
+            Export
+          </Button>
         </div>
       </div>
+
+      <VocabularySearch
+        onSearch={setSearchQuery}
+        onFilterGroup={setSelectedGroup}
+        groups={[
+          { id: 1, name: 'Basics' },
+          { id: 2, name: 'Advanced' }
+          // TODO: Replace with actual groups from API
+        ]}
+      />
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Word
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Translation
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Group
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedVocabulary.map((item: VocabularyItem) => (
+                <tr key={item.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">{item.word}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{item.translation}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {item.groupId ? 'Group ' + item.groupId : 'Ungrouped'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Button variant="secondary" size="sm">
+                      Edit
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        )}
+      </Card>
+
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)}>
+        <VocabularyImport
+          onImport={handleImport}
+          onClose={() => setShowImport(false)}
+        />
+      </Modal>
+
+      <Modal isOpen={showExport} onClose={() => setShowExport(false)}>
+        <VocabularyExport
+          vocabulary={vocabulary || []}
+          onClose={() => setShowExport(false)}
+        />
+      </Modal>
     </div>
   )
 }

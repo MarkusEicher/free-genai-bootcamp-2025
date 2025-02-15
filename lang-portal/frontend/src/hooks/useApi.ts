@@ -10,18 +10,25 @@ import { api } from '../lib/api'
 export const queryClient = new QueryClient()
 
 // Vocabulary hooks
-export function useVocabulary(groupId?: number | null) {
-  return useQuery({
-    queryKey: ['vocabulary', groupId],
-    queryFn: async () => {
-      const url = groupId 
-        ? `/api/vocabulary?groupId=${groupId}`
-        : '/api/vocabulary'
-      const response = await fetch(url)
-      if (!response.ok) throw new Error('Failed to fetch vocabulary')
-      return response.json()
+export function useVocabulary() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: ['vocabulary'],
+    queryFn: () => api.get('/vocabulary')
+  })
+
+  const mutation = useMutation({
+    mutationFn: (newVocabulary: any) => api.put('/vocabulary', newVocabulary),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary'] })
     }
   })
+
+  return {
+    ...query,
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync
+  }
 }
 
 export function useVocabularyItem(id: number) {
