@@ -1,6 +1,9 @@
-from fastapi import FastAPI, status
+from fastapi import FastAPI, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.models.vocabulary import Vocabulary
 
 app = FastAPI(
     title="Language Learning Portal",
@@ -28,3 +31,7 @@ async def health_check():
 @app.get("/")
 async def root():
     return RedirectResponse(url="/docs")
+
+@app.get("/vocabularies")
+def get_vocabularies(db: Session = Depends(get_db)):
+    return db.query(Vocabulary).all()
