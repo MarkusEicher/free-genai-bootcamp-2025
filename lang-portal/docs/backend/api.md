@@ -5,7 +5,87 @@
 - **/health** - Health check endpoint
 - **/docs** - Swagger UI documentation
 
-## Vocabulary Endpoints
+## Language Management
+
+### Languages
+#### List Languages
+- **GET /api/v1/languages/**
+- **Response:** List of languages
+```json
+[
+  {
+    "id": 1,
+    "code": "en",
+    "name": "English"
+  },
+  {
+    "id": 2,
+    "code": "es",
+    "name": "Spanish"
+  }
+]
+```
+
+#### Get Language
+- **GET /api/v1/languages/{language_id}**
+- **Response:** Single language
+```json
+{
+  "id": 1,
+  "code": "en",
+  "name": "English"
+}
+```
+
+#### Create Language
+- **POST /api/v1/languages/**
+- **Body:**
+```json
+{
+  "code": "fr",
+  "name": "French"
+}
+```
+
+### Language Pairs
+#### List Language Pairs
+- **GET /api/v1/language-pairs/**
+- **Response:** List of language pairs with related language details
+```json
+[
+  {
+    "id": 1,
+    "source_language_id": 1,
+    "target_language_id": 2,
+    "source_language": {
+      "id": 1,
+      "code": "en",
+      "name": "English"
+    },
+    "target_language": {
+      "id": 2,
+      "code": "es",
+      "name": "Spanish"
+    }
+  }
+]
+```
+
+#### Get Language Pair
+- **GET /api/v1/language-pairs/{pair_id}**
+- **Response:** Single language pair with related languages
+
+#### Create Language Pair
+- **POST /api/v1/language-pairs/**
+- **Body:**
+```json
+{
+  "source_language_id": 1,
+  "target_language_id": 2
+}
+```
+
+## Vocabulary Management
 
 ### List Vocabularies
 - **GET /vocabularies/**

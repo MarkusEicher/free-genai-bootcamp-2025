@@ -14,6 +14,11 @@ class Vocabulary(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     language_pair = relationship("LanguagePair")
+    groups = relationship(
+        "VocabularyGroup",
+        secondary="vocabulary_group_association",
+        back_populates="vocabularies"
+    )
 
     __table_args__ = (
         UniqueConstraint('word', 'language_pair_id', name='unique_word_per_language_pair'),
