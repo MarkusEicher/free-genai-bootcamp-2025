@@ -35,17 +35,17 @@
   - [x] Add endpoints for recording attempts
   - [x] Add endpoints for retrieving progress
 
-- [ ] Add learning statistics
-  - [ ] Create statistics endpoints
-  - [ ] Track success rate per vocabulary
-  - [ ] Track success rate per group
-  - [ ] Track overall progress
+- [x] Add learning statistics
+  - [x] Create statistics endpoints
+  - [x] Track success rate per vocabulary
+  - [x] Track success rate per group
+  - [x] Track overall progress
 
 ### 1.2.3 Testing and Documentation
-- [ ] Add tests for new models and endpoints
-- [ ] Update API documentation
-- [ ] Add example requests/responses
-- [ ] Document learning progress features
+- [x] Add tests for new models and endpoints
+- [x] Update API documentation
+- [x] Add example requests/responses
+- [x] Document learning progress features
 
 ### 1.3 Frontend Setup
 - [ ] Create Vite React project

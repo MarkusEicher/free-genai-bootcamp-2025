@@ -25,8 +25,13 @@ def record_progress(
     ).first()
     
     if not progress:
-        progress = VocabularyProgress(vocabulary_id=vocab_id)
+        progress = VocabularyProgress(
+            vocabulary_id=vocab_id,
+            correct_attempts=0,
+            incorrect_attempts=0
+        )
         db.add(progress)
+        db.commit()
     
     # Update attempts
     if update.correct:
@@ -34,16 +39,8 @@ def record_progress(
     else:
         progress.incorrect_attempts += 1
     
-    # Update last reviewed
-    progress.last_reviewed = datetime.utcnow()
-    
-    # Check if mastered (e.g., 90% success rate over at least 10 attempts)
-    total_attempts = progress.correct_attempts + progress.incorrect_attempts
-    if total_attempts >= 10 and progress.success_rate >= 90:
-        progress.mastered = True
-    
+    progress.last_reviewed = func.now()
     db.commit()
-    db.refresh(progress)
     return progress
 
 @router.get("/vocabulary/{vocab_id}/progress", response_model=ProgressSchema)

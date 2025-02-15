@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, ForwardRef
 from datetime import datetime
 from .language import LanguagePair
@@ -7,6 +7,8 @@ from .language import LanguagePair
 VocabularyInDB = ForwardRef('VocabularyInDB')
 
 class VocabularyGroupBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     name: str
     description: Optional[str] = None
     language_pair_id: int
@@ -20,10 +22,9 @@ class VocabularyGroupUpdate(BaseModel):
 
 class VocabularyGroup(VocabularyGroupBase):
     id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
     language_pair: LanguagePair
-
-    class Config:
-        from_attributes = True
 
 class VocabularyGroupWithVocabularies(VocabularyGroup):
     vocabularies: List[VocabularyInDB] = []

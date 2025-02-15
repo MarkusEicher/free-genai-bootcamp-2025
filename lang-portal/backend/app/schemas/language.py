@@ -1,7 +1,9 @@
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, ConfigDict
 
 class LanguageBase(BaseModel):
-    code: constr(min_length=2, max_length=2)  # ISO 639-1 code
+    model_config = ConfigDict(from_attributes=True)
+    
+    code: str
     name: str
 
 class LanguageCreate(LanguageBase):
@@ -9,9 +11,6 @@ class LanguageCreate(LanguageBase):
 
 class Language(LanguageBase):
     id: int
-
-    class Config:
-        from_attributes = True
 
 class LanguagePairBase(BaseModel):
     source_language_id: int

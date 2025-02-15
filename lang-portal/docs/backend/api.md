@@ -213,3 +213,73 @@
 ### Remove Vocabulary from Group
 - **DELETE /api/v1/vocabulary-groups/{group_id}/vocabularies/{vocab_id}**
 - **Response:** Success message
+
+## Learning Progress and Statistics
+
+### Progress Tracking
+#### Record Progress
+- **POST /api/v1/vocabulary/{vocab_id}/progress**
+- **Body:**
+```json
+{
+  "correct": true
+}
+```
+- **Response:** Updated progress information
+
+#### Get Vocabulary Progress
+- **GET /api/v1/vocabulary/{vocab_id}/progress**
+- **Response:** Progress details for specific vocabulary
+
+### Statistics
+
+#### Vocabulary Statistics
+- **GET /api/v1/statistics/vocabulary/{vocab_id}**
+- **Response:**
+```json
+{
+  "vocabulary_id": 1,
+  "word": "hello",
+  "translation": "hola",
+  "correct_attempts": 8,
+  "incorrect_attempts": 2,
+  "success_rate": 80.0,
+  "mastered": false,
+  "last_reviewed": "2024-01-20T15:30:00Z"
+}
+```
+
+#### Group Statistics
+- **GET /api/v1/statistics/group/{group_id}**
+- **Response:**
+```json
+{
+  "group_id": 1,
+  "name": "Basic Phrases",
+  "total_vocabulary": 20,
+  "mastered_vocabulary": 15,
+  "completion_rate": 75.0,
+  "average_success_rate": 85.5
+}
+```
+
+#### Overall Statistics
+- **GET /api/v1/statistics/overall**
+- **Response:**
+```json
+{
+  "total_vocabulary": 100,
+  "vocabulary_started": 80,
+  "vocabulary_mastered": 40,
+  "completion_rate": 40.0,
+  "average_success_rate": 78.5,
+  "recent_activity": [
+    {
+      "vocabulary_id": 1,
+      "word": "hello",
+      "success_rate": 80.0,
+      "last_reviewed": "2024-01-20T15:30:00Z"
+    }
+  ]
+}
+```

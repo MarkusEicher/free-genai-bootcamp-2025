@@ -7,11 +7,11 @@ class VocabularyProgress(Base):
     __tablename__ = "vocabulary_progress"
 
     id = Column(Integer, primary_key=True, index=True)
-    vocabulary_id = Column(Integer, ForeignKey("vocabularies.id", ondelete="CASCADE"))
-    correct_attempts = Column(Integer, default=0)
-    incorrect_attempts = Column(Integer, default=0)
-    last_reviewed = Column(DateTime(timezone=True), nullable=True)
-    mastered = Column(Boolean, default=False)
+    vocabulary_id = Column(Integer, ForeignKey("vocabularies.id"))
+    correct_attempts = Column(Integer, default=0, nullable=False)
+    incorrect_attempts = Column(Integer, default=0, nullable=False)
+    last_reviewed = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    mastered = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -20,4 +20,6 @@ class VocabularyProgress(Base):
     @property
     def success_rate(self):
         total = self.correct_attempts + self.incorrect_attempts
-        return (self.correct_attempts / total * 100) if total > 0 else 0 
+        if total == 0:
+            return 0
+        return (self.correct_attempts * 100.0) / total 

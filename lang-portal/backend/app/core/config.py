@@ -1,5 +1,5 @@
-from pydantic_settings import BaseSettings
-from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional
 import os
 from dotenv import load_dotenv
 
@@ -7,6 +7,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+    
     # API
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Language Learning Portal"
@@ -20,10 +26,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL", 
-        "sqlite:///./app.db"  # Default SQLite database
+        "sqlite:///./sql_app.db"  # Default SQLite database
     )
     
-    class Config:
-        case_sensitive = True
+    TEST_DATABASE_URL: str = "sqlite:///./test.db"
 
 settings = Settings()
