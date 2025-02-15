@@ -6,8 +6,9 @@ from app.db.database import Base
 vocabulary_group_association = Table(
     'vocabulary_group_association',
     Base.metadata,
-    Column('vocabulary_id', Integer, ForeignKey('vocabularies.id')),
-    Column('group_id', Integer, ForeignKey('vocabulary_groups.id'))
+    Column('vocabulary_id', Integer, ForeignKey('vocabularies.id', ondelete='CASCADE')),
+    Column('group_id', Integer, ForeignKey('vocabulary_groups.id', ondelete='CASCADE')),
+    extend_existing=True
 )
 
 class VocabularyGroup(Base):

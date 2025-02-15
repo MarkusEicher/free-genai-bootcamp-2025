@@ -135,3 +135,81 @@
 - **Parameters:**
   - `vocab_id` (int): Vocabulary ID
 - **Response:** No content (204)
+
+## Vocabulary Groups
+
+### List Vocabulary Groups
+- **GET /api/v1/vocabulary-groups/**
+- **Parameters:**
+  - `language_pair_id` (optional): Filter by language pair
+  - `skip` (optional): Number of records to skip
+  - `limit` (optional): Number of records to return
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Basic Phrases",
+    "description": "Essential everyday phrases",
+    "language_pair_id": 1,
+    "language_pair": {
+      "id": 1,
+      "source_language": {"code": "en", "name": "English"},
+      "target_language": {"code": "es", "name": "Spanish"}
+    }
+  }
+]
+```
+
+### Get Vocabulary Group
+- **GET /api/v1/vocabulary-groups/{group_id}**
+- **Response:** Group details with vocabularies
+```json
+{
+  "id": 1,
+  "name": "Basic Phrases",
+  "description": "Essential everyday phrases",
+  "language_pair_id": 1,
+  "language_pair": {
+    "id": 1,
+    "source_language": {"code": "en", "name": "English"},
+    "target_language": {"code": "es", "name": "Spanish"}
+  },
+  "vocabularies": [
+    {
+      "id": 1,
+      "word": "hello",
+      "translation": "hola"
+    }
+  ]
+}
+```
+
+### Create Vocabulary Group
+- **POST /api/v1/vocabulary-groups/**
+- **Body:**
+```json
+{
+  "name": "Basic Phrases",
+  "description": "Essential everyday phrases",
+  "language_pair_id": 1
+}
+```
+
+### Update Vocabulary Group
+- **PUT /api/v1/vocabulary-groups/{group_id}**
+- **Body:**
+```json
+{
+  "name": "Updated Name",
+  "description": "Updated description"
+}
+```
+
+### Add Vocabulary to Group
+- **POST /api/v1/vocabulary-groups/{group_id}/vocabularies/{vocab_id}**
+- **Response:** Success message
+
+### Remove Vocabulary from Group
+- **DELETE /api/v1/vocabulary-groups/{group_id}/vocabularies/{vocab_id}**
+- **Response:** Success message

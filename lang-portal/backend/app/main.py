@@ -6,7 +6,7 @@ from typing import List, Optional
 from app.db.database import get_db
 from app.models.vocabulary import Vocabulary
 from app.schemas.vocabulary import VocabularyCreate, VocabularyUpdate, VocabularyInDB
-from app.api.v1.endpoints import languages
+from app.api.v1.endpoints import languages, vocabulary_groups
 
 app = FastAPI(
     title="Language Learning Portal",
@@ -25,6 +25,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(languages.router, prefix="/api/v1", tags=["languages"])
+app.include_router(vocabulary_groups.router, prefix="/api/v1", tags=["vocabulary-groups"])
 
 # Health check endpoint
 @app.get("/health")
