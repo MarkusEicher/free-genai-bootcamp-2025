@@ -7,12 +7,15 @@ export interface SessionActivity {
 
 export interface Session {
   id: number
-  startTime: string
-  endTime: string
+  date: string
   duration: number
   score: number
-  activitiesCompleted: number
-  activities: SessionActivity[]
+  activities: {
+    id: number
+    name: string
+    duration: number
+    score: number
+  }[]
 }
 
 export interface SessionStats {

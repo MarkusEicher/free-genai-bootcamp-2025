@@ -6,7 +6,6 @@ import type { VocabularyGroup } from '../types/vocabulary'
 
 export default function VocabularyGroupsPage() {
   const navigate = useNavigate()
-  const [newGroupName, setNewGroupName] = useState('')
   const [editingGroup, setEditingGroup] = useState<VocabularyGroup | null>(null)
   const [selectedWords, setSelectedWords] = useState<number[]>([])
   const [mergingGroup, setMergingGroup] = useState<VocabularyGroup | null>(null)
@@ -18,13 +17,16 @@ export default function VocabularyGroupsPage() {
   const updateMutation = useUpdateGroup()
   const mergeMutation = useMergeGroups()
 
-  const handleCreateGroup = async (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!newGroupName.trim()) return
-
+    const formData = new FormData(e.currentTarget)
+    
     try {
-      await createMutation.mutateAsync({ name: newGroupName })
-      setNewGroupName('')
+      await createMutation.mutateAsync({
+        name: formData.get('name') as string,
+        description: formData.get('description') as string
+      })
+      e.currentTarget.reset()
     } catch (error) {
       console.error('Failed to create group:', error)
     }
@@ -125,20 +127,34 @@ export default function VocabularyGroupsPage() {
 
       {/* Create New Group Form */}
       <Card className="p-6">
-        <form onSubmit={handleCreateGroup} className="flex gap-4">
-          <input
-            type="text"
-            value={newGroupName}
-            onChange={(e) => setNewGroupName(e.target.value)}
-            placeholder="Enter group name..."
-            className="flex-1 p-2 border rounded-lg"
-          />
-          <Button
-            type="submit"
-            disabled={createMutation.isPending || !newGroupName.trim()}
-          >
-            {createMutation.isPending ? 'Creating...' : 'Create Group'}
-          </Button>
+        <form onSubmit={handleCreateGroup} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Name</label>
+            <input
+              name="name"
+              type="text"
+              required
+              className="mt-1 w-full p-2 border rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea
+              name="description"
+              className="mt-1 w-full p-2 border rounded"
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEditingGroup(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Create</Button>
+          </div>
         </form>
       </Card>
 
@@ -170,7 +186,10 @@ export default function VocabularyGroupsPage() {
                 <div>
                   <h3 className="text-lg font-medium">{group.name}</h3>
                   <div className="text-sm text-gray-500 space-y-1">
-                    <p>{group.wordCount || 0} words</p>
+                    <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                      <div>{group.words.length} words</div>
+                      <div>{group.mastered} mastered</div>
+                    </div>
                     {groupStats?.groups?.[group.id] && (
                       <p>
                         Avg. Progress: {Math.round(groupStats.groups[group.id].avgProgress * 100)}%

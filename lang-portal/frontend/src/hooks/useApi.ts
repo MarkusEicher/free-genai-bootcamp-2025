@@ -1,19 +1,10 @@
 import { VocabularyItem } from '../types/vocabulary'
+import type { VocabularyWord, VocabularyGroup } from '../types/vocabulary'
 import { useQuery, useMutation, QueryClient, useQueryClient } from '@tanstack/react-query'
 import { sessionsApi } from '../api/sessions'
-import { settingsApi } from '../api/settings'
 import { Activity } from '../types/activities'
 import { Goal } from '../types/goals'
-
-interface UserSettings {
-  language: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced'
-  dailyGoal: number
-  emailNotifications: boolean
-  soundEffects: boolean
-  darkMode: boolean
-  showTimer: boolean
-}
+import type { UserProfile, UpdateProfileData } from '../types/profile'
 
 export const queryClient = new QueryClient()
 
@@ -96,11 +87,11 @@ export function useDeleteVocabulary() {
 }
 
 // Sessions hooks
-export function useSessions(timeframe: 'week' | 'month' | 'all') {
+export function useSessions() {
   return useQuery({
-    queryKey: ['sessions', timeframe],
+    queryKey: ['sessions'],
     queryFn: async () => {
-      const response = await fetch(`/api/sessions?timeframe=${timeframe}`)
+      const response = await fetch('/api/sessions')
       if (!response.ok) throw new Error('Failed to fetch sessions')
       return response.json()
     }
@@ -181,55 +172,6 @@ export function useUpdateActivity() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['activity', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['activities'] })
-    }
-  })
-}
-
-// Settings hooks
-export function useSettings() {
-  return useQuery({
-    queryKey: ['settings'],
-    queryFn: async () => {
-      const response = await fetch('/api/settings')
-      if (!response.ok) throw new Error('Failed to fetch settings')
-      return response.json()
-    }
-  })
-}
-
-export function useUpdateSettings() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (settings: UserSettings) => {
-      const response = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      })
-      if (!response.ok) throw new Error('Failed to update settings')
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] })
-    }
-  })
-}
-
-export function useExportData() {
-  return useMutation({
-    mutationFn: async () => {
-      const response = await fetch('/api/export')
-      if (!response.ok) throw new Error('Failed to export data')
-      return response.json()
-    }
-  })
-}
-
-export const useResetProgress = () => {
-  return useMutation({
-    mutationFn: settingsApi.resetProgress,
-    onSuccess: () => {
-      queryClient.invalidateQueries()
     }
   })
 }
@@ -326,36 +268,48 @@ export function useCreateVocabularyGroup() {
   })
 }
 
-export function useDeleteGroup() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (groupId: number) => {
-      const response = await fetch(`/api/vocabulary/groups/${groupId}`, {
-        method: 'DELETE'
-      })
-      if (!response.ok) throw new Error('Failed to delete group')
+export function useVocabularyGroup(id: number) {
+  return useQuery({
+    queryKey: ['vocabulary-group', id],
+    queryFn: async () => {
+      const response = await fetch(`/api/vocabulary-groups/${id}`)
+      if (!response.ok) throw new Error('Failed to fetch group')
       return response.json()
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vocabularyGroups'] })
-    }
+    enabled: !!id
   })
 }
 
 export function useUpdateGroup() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (data: { id: number; name: string }) => {
-      const response = await fetch(`/api/vocabulary/groups/${data.id}`, {
+    mutationFn: async (data: Partial<VocabularyGroup>) => {
+      const response = await fetch(`/api/vocabulary-groups/${data.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: data.name })
+        body: JSON.stringify(data)
       })
       if (!response.ok) throw new Error('Failed to update group')
       return response.json()
     },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-group', data.id] })
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-groups'] })
+    }
+  })
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/vocabulary-groups/${id}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete group')
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vocabularyGroups'] })
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-groups'] })
     }
   })
 }
@@ -488,6 +442,374 @@ export function useGoals() {
     queryFn: async () => {
       const response = await fetch('/api/goals')
       if (!response.ok) throw new Error('Failed to fetch goals')
+      return response.json()
+    }
+  })
+}
+
+export function useDashboardStats() {
+  return useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/stats')
+      if (!response.ok) throw new Error('Failed to fetch dashboard stats')
+      return response.json()
+    }
+  })
+}
+
+export function useRecentActivity() {
+  return useQuery({
+    queryKey: ['recent-activity'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/activity')
+      if (!response.ok) throw new Error('Failed to fetch recent activity')
+      return response.json()
+    }
+  })
+}
+
+export function usePerformanceHistory() {
+  return useQuery({
+    queryKey: ['performance-history'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/performance-history')
+      if (!response.ok) throw new Error('Failed to fetch performance history')
+      return response.json()
+    }
+  })
+}
+
+export function useStreak() {
+  return useQuery({
+    queryKey: ['streak'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/streak')
+      if (!response.ok) throw new Error('Failed to fetch streak')
+      return response.json()
+    }
+  })
+}
+
+export function useLastSession() {
+  return useQuery({
+    queryKey: ['last-session'],
+    queryFn: async () => {
+      const response = await fetch('/api/sessions/last')
+      if (!response.ok) throw new Error('Failed to fetch last session')
+      return response.json()
+    }
+  })
+}
+
+export function useAddWord() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Omit<VocabularyWord, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const response = await fetch('/api/vocabulary-words', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to add word')
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-group', variables.groupId] })
+    }
+  })
+}
+
+export function useVocabularyWord(id: number) {
+  return useQuery({
+    queryKey: ['vocabulary-word', id],
+    queryFn: async () => {
+      const response = await fetch(`/api/vocabulary-words/${id}`)
+      if (!response.ok) throw new Error('Failed to fetch word')
+      return response.json()
+    },
+    enabled: !!id
+  })
+}
+
+export function useUpdateWord() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Partial<VocabularyWord>) => {
+      const response = await fetch(`/api/vocabulary-words/${data.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to update word')
+      return response.json()
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-word', data.id] })
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-words'] })
+    }
+  })
+}
+
+export function useDeleteWord() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/vocabulary-words/${id}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete word')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-words'] })
+    }
+  })
+}
+
+export function useUserProfile() {
+  return useQuery({
+    queryKey: ['user-profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/user/profile')
+      if (!response.ok) throw new Error('Failed to fetch user profile')
+      return response.json()
+    }
+  })
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Partial<UpdateProfileData>) => {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to update profile')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+    }
+  })
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: { name: string; description: string }) => {
+      const response = await fetch('/api/vocabulary-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to create group')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vocabulary-groups'] })
+    }
+  })
+}
+
+export function useStats() {
+  return useQuery({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/stats')
+      if (!response.ok) throw new Error('Failed to fetch stats')
+      return response.json()
+    }
+  })
+}
+
+export function useActivityHistory() {
+  return useQuery({
+    queryKey: ['activity-history'],
+    queryFn: async () => {
+      const response = await fetch('/api/activity-history')
+      if (!response.ok) throw new Error('Failed to fetch activity history')
+      return response.json()
+    }
+  })
+}
+
+export function usePracticeStats() {
+  return useQuery({
+    queryKey: ['practice-stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/practice-stats')
+      if (!response.ok) throw new Error('Failed to fetch practice stats')
+      return response.json()
+    }
+  })
+}
+
+export function useRecommendedWords() {
+  return useQuery({
+    queryKey: ['recommended-words'],
+    queryFn: async () => {
+      const response = await fetch('/api/recommended-words')
+      if (!response.ok) throw new Error('Failed to fetch recommended words')
+      return response.json()
+    }
+  })
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const response = await fetch('/api/notifications')
+      if (!response.ok) throw new Error('Failed to fetch notifications')
+      return response.json()
+    }
+  })
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/notifications/${id}/read`, {
+        method: 'POST'
+      })
+      if (!response.ok) throw new Error('Failed to mark notification as read')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    }
+  })
+}
+
+export function useProfile() {
+  return useQuery<UserProfile>({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/profile')
+      if (!response.ok) throw new Error('Failed to fetch profile')
+      return response.json()
+    }
+  })
+}
+
+export function useLearningStats(userId: number) {
+  return useQuery({
+    queryKey: ['learning-stats', userId],
+    queryFn: async () => {
+      const response = await fetch(`/api/learning-stats/${userId}`)
+      if (!response.ok) throw new Error('Failed to fetch learning stats')
+      return response.json()
+    },
+    enabled: !!userId
+  })
+}
+
+export function useVocabularyWords() {
+  return useQuery({
+    queryKey: ['vocabulary-words'],
+    queryFn: async () => {
+      const response = await fetch('/api/vocabulary-words')
+      if (!response.ok) throw new Error('Failed to fetch vocabulary words')
+      return response.json()
+    }
+  })
+}
+
+export function usePracticeSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: {
+      mode: string
+      difficulty: string
+      wordIds: number[]
+    }) => {
+      const response = await fetch('/api/practice-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to create practice session')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['practice-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
+    }
+  })
+}
+
+export function useClaimReward() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (achievementId: number) => {
+      const response = await fetch(`/api/achievements/${achievementId}/claim`, {
+        method: 'POST'
+      })
+      if (!response.ok) throw new Error('Failed to claim reward')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['achievements'] })
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] })
+    }
+  })
+}
+
+export function useUserAchievements(userId: number) {
+  return useQuery({
+    queryKey: ['user-achievements', userId],
+    queryFn: async () => {
+      const response = await fetch(`/api/users/${userId}/achievements`)
+      if (!response.ok) throw new Error('Failed to fetch user achievements')
+      return response.json()
+    },
+    enabled: !!userId
+  })
+}
+
+export function useUserStats(userId: number) {
+  return useQuery({
+    queryKey: ['user-stats', userId],
+    queryFn: async () => {
+      const response = await fetch(`/api/users/${userId}/stats`)
+      if (!response.ok) throw new Error('Failed to fetch user stats')
+      return response.json()
+    },
+    enabled: !!userId
+  })
+}
+
+// Add these practice-specific hooks
+export function useStartPractice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: { type: string; difficulty: string; wordCount: number }) => {
+      const response = await fetch('/api/practice/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to start practice')
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['practice'] })
+    }
+  })
+}
+
+export function useCheckAnswer() {
+  return useMutation({
+    mutationFn: async (data: { practiceId: number; answer: string }) => {
+      const response = await fetch(`/api/practice/${data.practiceId}/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      if (!response.ok) throw new Error('Failed to check answer')
       return response.json()
     }
   })
