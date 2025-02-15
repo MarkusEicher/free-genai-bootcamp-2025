@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL", 
-        "sqlite:///./app.db"
+        "sqlite:///./app.db"  # Default SQLite database
     )
     
     class Config:

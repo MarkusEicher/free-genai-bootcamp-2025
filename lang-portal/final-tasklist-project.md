@@ -11,12 +11,12 @@
 - [x] Create code review checklist
 
 ### 1.2 Backend Setup
-- [x] Create virtual environment
+- [x] Create virtual environment (using Poetry)
 - [x] Install FastAPI and dependencies
-- [ ] Setup basic FastAPI application
+- [x] Setup basic FastAPI application
+- [x] Setup Swagger UI (comes with FastAPI)
+- [x] Create API documentation structure (created api.md)
 - [ ] Configure database connection
-- [ ] Setup Swagger UI
-- [ ] Create API documentation structure
 - [ ] Setup backend test environment
 
 ### 1.3 Frontend Setup
