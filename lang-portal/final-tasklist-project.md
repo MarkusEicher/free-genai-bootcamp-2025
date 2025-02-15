@@ -11,13 +11,41 @@
 - [x] Create code review checklist
 
 ### 1.2 Backend Setup
-- [x] Create virtual environment (using Poetry)
+- [x] Create virtual environment
 - [x] Install FastAPI and dependencies
 - [x] Setup basic FastAPI application
-- [x] Setup Swagger UI (comes with FastAPI)
-- [x] Create API documentation structure (created api.md)
 - [x] Configure database connection
-- [x] Setup backend test environment
+- [x] Setup Swagger UI
+- [x] Create API documentation
+
+### 1.2.1 Language and Vocabulary Structure
+- [ ] Add language model and endpoints
+  - [ ] Create language pairs model
+  - [ ] Add CRUD endpoints for languages
+  - [ ] Update vocabulary model with language pair reference
+
+- [ ] Add vocabulary grouping
+  - [ ] Create vocabulary group model
+  - [ ] Add CRUD endpoints for groups
+  - [ ] Update vocabulary model with group reference
+
+### 1.2.2 Learning Progress
+- [ ] Add progress tracking
+  - [ ] Create progress model (correct/incorrect attempts)
+  - [ ] Add endpoints for recording attempts
+  - [ ] Add endpoints for retrieving progress
+
+- [ ] Add learning statistics
+  - [ ] Create statistics endpoints
+  - [ ] Track success rate per vocabulary
+  - [ ] Track success rate per group
+  - [ ] Track overall progress
+
+### 1.2.3 Testing and Documentation
+- [ ] Add tests for new models and endpoints
+- [ ] Update API documentation
+- [ ] Add example requests/responses
+- [ ] Document learning progress features
 
 ### 1.3 Frontend Setup
 - [ ] Create Vite React project
