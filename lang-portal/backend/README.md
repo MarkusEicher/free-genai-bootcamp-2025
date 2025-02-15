@@ -1,24 +1,38 @@
 # Language Learning Portal - Backend
 
-## Overview
-FastAPI backend for the Language Learning Portal.
+## Prerequisites
+- Python >= 3.8.1
+- Poetry (for development)
 
-## Setup
-1. Create virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-   ```
+## Installation
+
+### Development Setup (Recommended)
+1. Install Poetry globally:
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
 
 2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+cd backend
+poetry install
+poetry shell
+```
 
-3. Run development server:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
+### Alternative Setup (using pip)
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt  # For production
+# OR
+pip install -r requirements-dev.txt  # For development
+```
+
+## Development
+- Use Poetry for dependency management
+- Run `poetry add package-name` to add new dependencies
+- Run `poetry update` to update dependencies
 
 ## Project Structure
 ```
