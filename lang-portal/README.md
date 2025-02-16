@@ -19,9 +19,17 @@ A single-user language learning application with vocabulary management, learning
 ## Getting Started
 
 ### Prerequisites
+
+> ## IMPORTANT: 
+
+> ## Make sure you have Rust installed.
+
+>Because of the way we use the Python dependency manager poetry, we need the system that is running the backend locally to have Rust installed and cargo needs to be present in the PATH of the terminal were you start the backend server. We are working to fix this asap.
+
 - Python 3.8+
 - Node.js 18+
 - Git
+- Cargo
 
 ### Development Setup
 1. Clone the repository
