@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from app.api.v1.endpoints import languages, vocabulary_groups, progress, statistics, vocabulary
+from app.api.v1.endpoints import (
+    languages,
+    vocabulary_groups,
+    progress,
+    statistics,
+    vocabulary,
+    activities,
+    dashboard
+)
 
 app = FastAPI(
     title="Language Learning Portal",
@@ -24,6 +32,8 @@ app.include_router(vocabulary_groups.router, prefix="/api/v1", tags=["vocabulary
 app.include_router(progress.router, prefix="/api/v1", tags=["progress"])
 app.include_router(statistics.router, prefix="/api/v1/statistics", tags=["statistics"])
 app.include_router(vocabulary.router, prefix="/api/v1/vocabularies", tags=["vocabulary"])
+app.include_router(activities.router, prefix="/api/v1", tags=["activities"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 
 # Health check endpoint
 @app.get("/health")

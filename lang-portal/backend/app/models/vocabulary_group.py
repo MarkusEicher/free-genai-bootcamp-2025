@@ -1,16 +1,8 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.db.database import Base
-
-# Association table for many-to-many relationship
-vocabulary_group_association = Table(
-    'vocabulary_group_association',
-    Base.metadata,
-    Column('vocabulary_id', Integer, ForeignKey('vocabularies.id', ondelete="CASCADE")),
-    Column('group_id', Integer, ForeignKey('vocabulary_groups.id', ondelete="CASCADE"))
-)
+from app.db.base_class import Base
+from app.models.associations import vocabulary_group_association
 
 class VocabularyGroup(Base):
     __tablename__ = "vocabulary_groups"

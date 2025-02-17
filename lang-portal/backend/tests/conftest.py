@@ -1,43 +1,48 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from httpx import ASGITransport, WSGITransport
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
-from app.db.database import Base, get_db
+from app.db.base_class import Base
+from app.db.database import get_db
 from app.main import app
 from app.models.language import Language
 from app.models.language_pair import LanguagePair
 from app.models.vocabulary import Vocabulary
 from app.models.vocabulary_group import VocabularyGroup
-from app.models.progress import VocabularyProgress
+from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
+from app.core.cache import test_redis_client
 from alembic.config import Config
 from alembic import command
 from sqlalchemy import event
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 
 # Test database setup
 TEST_DATABASE_URL = settings.TEST_DATABASE_URL
 engine = create_engine(
     TEST_DATABASE_URL,
     echo=settings.TEST_DB_ECHO,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30
+    connect_args={"check_same_thread": False}
 )
+
+# Enable foreign key support for SQLite
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def run_migrations(database_url: str):
-    """Run migrations on specified database"""
-    alembic_cfg = Config("alembic.ini")
-    alembic_cfg.set_main_option("sqlalchemy.url", database_url)
-    command.upgrade(alembic_cfg, "head")
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def test_engine():
     """Create test engine and run migrations"""
+    # Drop all tables for a clean start
+    Base.metadata.drop_all(bind=engine)
+    
     # Create all tables
-    Base.metadata.drop_all(bind=engine)  # Clean start
     Base.metadata.create_all(bind=engine)
     
     yield engine
@@ -47,33 +52,41 @@ def test_engine():
         Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
-def db_session():
+def db_session(test_engine) -> Session:
     """Create a fresh database session for each test"""
-    Base.metadata.create_all(bind=engine)
-    session = TestingSessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 @pytest.fixture(scope="function")
-def client(db_session):
-    app.dependency_overrides[get_db] = lambda: db_session
+def client(db_session: Session):
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+    
+    app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
 # Model fixtures
 @pytest.fixture(scope="function")
-def test_language(db_session):
+def test_language(db_session: Session):
     language = Language(code="en", name="English")
     db_session.add(language)
     db_session.commit()
     return language
 
 @pytest.fixture(scope="function")
-def test_language_pair(db_session, test_language):
+def test_language_pair(db_session: Session, test_language):
     target_language = Language(code="de", name="German")
     db_session.add(target_language)
     db_session.commit()
@@ -87,7 +100,7 @@ def test_language_pair(db_session, test_language):
     return pair
 
 @pytest.fixture(scope="function")
-def test_vocabulary(db_session, test_language_pair):
+def test_vocabulary(db_session: Session, test_language_pair):
     vocabulary = Vocabulary(
         word="test",
         translation="test",
@@ -98,20 +111,64 @@ def test_vocabulary(db_session, test_language_pair):
     return vocabulary
 
 @pytest.fixture(scope="function")
-def test_vocabulary_with_progress(db_session, test_vocabulary):
-    progress = VocabularyProgress(
-        vocabulary_id=test_vocabulary.id,
-        correct_attempts=8,
-        incorrect_attempts=2,
-        mastered=True,
-        last_reviewed=datetime.now(UTC)
+def test_activity(db_session: Session):
+    """Create a test activity."""
+    activity = Activity(
+        type="flashcard",
+        name="Test Activity",
+        description="Test Description"
     )
-    db_session.add(progress)
+    db_session.add(activity)
+    db_session.commit()
+    return activity
+
+@pytest.fixture(scope="function")
+def test_activity_session(db_session: Session, test_activity):
+    """Create a test activity session."""
+    now = datetime.now(UTC)
+    session = ActivitySession(
+        activity_id=test_activity.id,
+        start_time=now - timedelta(minutes=30),
+        end_time=now
+    )
+    db_session.add(session)
+    db_session.commit()
+    return session
+
+@pytest.fixture(scope="function")
+def test_session_attempt(db_session: Session, test_activity_session, test_vocabulary):
+    """Create a test session attempt."""
+    attempt = SessionAttempt(
+        session_id=test_activity_session.id,
+        vocabulary_id=test_vocabulary.id,
+        is_correct=True,
+        response_time_ms=1500,
+        created_at=datetime.now(UTC)
+    )
+    db_session.add(attempt)
+    db_session.commit()
+    return attempt
+
+@pytest.fixture(scope="function")
+def test_vocabulary_with_attempts(db_session: Session, test_vocabulary, test_activity_session):
+    """Create a vocabulary with multiple attempts."""
+    attempts = [
+        SessionAttempt(
+            session_id=test_activity_session.id,
+            vocabulary_id=test_vocabulary.id,
+            is_correct=i < 8,  # 8 correct, 2 incorrect
+            response_time_ms=1500,
+            created_at=datetime.now(UTC) - timedelta(minutes=i)
+        )
+        for i in range(10)
+    ]
+    for attempt in attempts:
+        db_session.add(attempt)
     db_session.commit()
     return test_vocabulary
 
 @pytest.fixture(scope="function")
-def test_vocabulary_group(db_session, test_language_pair):
+def test_vocabulary_group(db_session: Session, test_language_pair):
     group = VocabularyGroup(
         name="Test Group",
         description="Test Description",
@@ -121,47 +178,9 @@ def test_vocabulary_group(db_session, test_language_pair):
     db_session.commit()
     return group
 
-@pytest.fixture
-def test_progress(db: Session, test_vocabulary):
-    """
-    Creates a test progress record.
-    Depends on test_vocabulary fixture.
-    """
-    progress = VocabularyProgress(
-        vocabulary_id=test_vocabulary.id,
-        correct_attempts=5,
-        incorrect_attempts=2,
-        mastered=False
-    )
-    db.add(progress)
-    db.commit()
-    db.refresh(progress)
-    return progress
-
-@pytest.fixture
-def test_language_with_progress(db_session: Session, test_vocabulary):
-    """Creates a test language with vocabulary and progress"""
-    progress = VocabularyProgress(
-        vocabulary_id=test_vocabulary.id,
-        correct_attempts=10,
-        incorrect_attempts=5,
-        mastered=True,
-        last_reviewed=datetime.utcnow()
-    )
-    db_session.add(progress)
-    db_session.commit()
-    db_session.refresh(progress)
-    return test_vocabulary.language_pair.source_language
-
-@pytest.fixture
-def test_vocabulary_group_with_vocabularies(db_session: Session, test_vocabulary_group, test_vocabulary):
-    """Creates a test vocabulary group with vocabularies"""
-    test_vocabulary_group.vocabularies.append(test_vocabulary)
-    db_session.commit()
-    db_session.refresh(test_vocabulary_group)
-    return test_vocabulary_group
-
-@pytest.fixture
-def db():
-    """Returns a database session for testing"""
-    return db_session
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear Redis cache before each test."""
+    test_redis_client.flushdb()
+    yield
+    test_redis_client.flushdb()
