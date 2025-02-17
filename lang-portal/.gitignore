@@ -57,6 +57,7 @@ Thumbs.db
 # Project specific build/generate directories
 backend/alembic/versions/*
 !backend/alembic/versions/.gitkeep
+backend/testvenv/
 frontend/build/
 frontend/dist/
 

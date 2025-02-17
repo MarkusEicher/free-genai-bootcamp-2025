@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
+from datetime import datetime, UTC
 
 class VocabularyProgress(Base):
     __tablename__ = "vocabulary_progress"
@@ -18,8 +19,8 @@ class VocabularyProgress(Base):
     vocabulary = relationship("Vocabulary", back_populates="progress")
 
     @property
-    def success_rate(self):
+    def success_rate(self) -> float:
         total = self.correct_attempts + self.incorrect_attempts
         if total == 0:
-            return 0
-        return (self.correct_attempts * 100.0) / total 
+            return 0.0
+        return (self.correct_attempts / total) * 100 

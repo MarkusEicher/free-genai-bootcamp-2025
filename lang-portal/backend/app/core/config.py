@@ -1,34 +1,21 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Optional
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True
-    )
-    
-    # API
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Language Learning Portal"
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",  # Frontend development server
-        "http://localhost:3000"   # Alternative frontend port
-    ]
-    
-    # Database
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", 
-        "sqlite:///./sql_app.db"  # Default SQLite database
-    )
-    
+    DATABASE_URL: str = "sqlite:///./app.db"
     TEST_DATABASE_URL: str = "sqlite:///./test.db"
+    
+    # Database configuration
+    DB_ECHO: bool = False  # SQL query logging
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    
+    # Test configuration
+    TEST_DB_ECHO: bool = True
+    KEEP_TEST_DB: bool = False  # Whether to keep test DB after tests
+    
+    class Config:
+        env_file = ".env"
 
 settings = Settings()

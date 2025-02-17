@@ -34,6 +34,24 @@ pip install -r requirements-dev.txt  # For development
 - Run `poetry add package-name` to add new dependencies
 - Run `poetry update` to update dependencies
 
+## Running the Application
+```bash
+# Development mode
+poetry run uvicorn app.main:app --reload
+
+# Production mode
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+## Testing
+```bash
+# Run all tests
+poetry run pytest
+
+# Run tests with coverage report
+poetry run pytest --cov=app tests/
+```
+
 ## Project Structure
 ```
 backend/
@@ -50,3 +68,25 @@ backend/
 - Follow PEP 8
 - Write tests for new features
 - Update documentation
+
+## Environment Variables
+Create a `.env` file in the root directory with the following variables:
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+SECRET_KEY=your-secret-key
+ENVIRONMENT=development
+```
+
+## API Documentation
+Once the application is running, you can access:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+## Contributing
+1. Create a new branch for your feature
+2. Write tests for your changes
+3. Update documentation as needed
+4. Submit a pull request
+
+## License
+[Add your license information here]

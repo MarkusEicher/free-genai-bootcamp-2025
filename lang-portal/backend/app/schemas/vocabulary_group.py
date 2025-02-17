@@ -1,34 +1,32 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, ForwardRef
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional
 from datetime import datetime
-from .language import LanguagePair
-
-# Forward reference for circular imports
-VocabularyInDB = ForwardRef('VocabularyInDB')
+from .vocabulary import VocabularyRead
 
 class VocabularyGroupBase(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    name: str
+    name: str = Field(..., min_length=1)
     description: Optional[str] = None
-    language_pair_id: int
+    language_pair_id: int = Field(..., gt=0)
 
 class VocabularyGroupCreate(VocabularyGroupBase):
     pass
 
 class VocabularyGroupUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
+    language_pair_id: Optional[int] = Field(None, gt=0)
 
-class VocabularyGroup(VocabularyGroupBase):
+class VocabularyGroupRead(VocabularyGroupBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime]
-    language_pair: LanguagePair
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    vocabularies: List[VocabularyRead] = []
 
-class VocabularyGroupWithVocabularies(VocabularyGroup):
-    vocabularies: List[VocabularyInDB] = []
-
-# Import at the end to avoid circular import issues
-from app.schemas.vocabulary import VocabularyInDB
-VocabularyGroupWithVocabularies.model_rebuild() 
+class VocabularyGroupWithVocabularies(VocabularyGroupRead):
+    model_config = ConfigDict(from_attributes=True)
+    
+    total_vocabularies: int = 0
+    mastered_vocabularies: int = 0
+    average_success_rate: float = 0.0

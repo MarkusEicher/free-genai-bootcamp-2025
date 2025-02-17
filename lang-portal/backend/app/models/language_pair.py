@@ -10,16 +10,10 @@ class LanguagePair(Base):
     source_language_id = Column(Integer, ForeignKey("languages.id"))
     target_language_id = Column(Integer, ForeignKey("languages.id"))
 
-    source_language = relationship(
-        Language,
-        foreign_keys=[source_language_id],
-        primaryjoin="LanguagePair.source_language_id == Language.id"
-    )
-    target_language = relationship(
-        Language,
-        foreign_keys=[target_language_id],
-        primaryjoin="LanguagePair.target_language_id == Language.id"
-    )
+    source_language = relationship("Language", foreign_keys=[source_language_id])
+    target_language = relationship("Language", foreign_keys=[target_language_id])
+    vocabulary_groups = relationship("VocabularyGroup", back_populates="language_pair")
+    vocabularies = relationship("Vocabulary", back_populates="language_pair")
 
     __table_args__ = (
         UniqueConstraint('source_language_id', 'target_language_id', name='unique_language_pair'),
