@@ -1,9 +1,14 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "sqlite:///./app.db"
-    TEST_DATABASE_URL: str = "sqlite:///./test.db"  # Changed to file-based for debugging
+    # Get the backend directory path
+    BACKEND_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    # Database URLs with explicit paths in backend directory
+    DATABASE_URL: str = f"sqlite:///{BACKEND_DIR}/data/app.db"
+    TEST_DATABASE_URL: str = f"sqlite:///{BACKEND_DIR}/data/test.db"
     
     # Database configuration
     DB_ECHO: bool = False  # SQL query logging

@@ -3,11 +3,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 
 class PerformanceMiddleware(BaseHTTPMiddleware):
     def __init__(
@@ -53,4 +49,4 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
                 f"took {log_data['duration_ms']}ms"
             )
         
-        return response 
+        return response

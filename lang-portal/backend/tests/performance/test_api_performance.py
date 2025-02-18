@@ -2,14 +2,40 @@
 import time
 from typing import List
 import pytest
+import concurrent.futures
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from datetime import datetime, UTC
 
-from app.models.activity import Activity, Session as ActivitySession
+from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
+from app.models.language import Language
+from app.models.language_pair import LanguagePair
+from app.models.vocabulary import Vocabulary
 from app.core.cache import redis_client
 
 def create_test_data(db_session: Session, num_activities: int = 10, num_sessions: int = 100):
     """Create test data for performance testing."""
+    # Create languages and vocabulary
+    source_lang = Language(code="en", name="English")
+    target_lang = Language(code="es", name="Spanish")
+    db_session.add_all([source_lang, target_lang])
+    db_session.commit()
+
+    lang_pair = LanguagePair(
+        source_language_id=source_lang.id,
+        target_language_id=target_lang.id
+    )
+    db_session.add(lang_pair)
+    db_session.commit()
+
+    vocabulary = Vocabulary(
+        word="test",
+        translation="test",
+        language_pair_id=lang_pair.id
+    )
+    db_session.add(vocabulary)
+    db_session.commit()
+
     # Create activities
     activities = []
     for i in range(num_activities):
@@ -18,21 +44,39 @@ def create_test_data(db_session: Session, num_activities: int = 10, num_sessions
             name=f"Test Activity {i}",
             description=f"Performance test activity {i}"
         )
+        activity.vocabularies.append(vocabulary)
         db_session.add(activity)
         activities.append(activity)
     db_session.commit()
 
-    # Create sessions
+    # Create sessions with attempts
     for activity in activities:
         for _ in range(num_sessions // num_activities):
             session = ActivitySession(
                 activity_id=activity.id,
-                correct_count=5,
-                incorrect_count=2,
-                success_rate=0.714
+                start_time=datetime.now(UTC)
             )
             db_session.add(session)
-    db_session.commit()
+            db_session.commit()
+
+            # Add attempts to achieve desired success rate
+            for _ in range(5):  # 5 correct attempts
+                attempt = SessionAttempt(
+                    session_id=session.id,
+                    vocabulary_id=vocabulary.id,
+                    is_correct=True,
+                    response_time_ms=1500
+                )
+                db_session.add(attempt)
+            for _ in range(2):  # 2 incorrect attempts
+                attempt = SessionAttempt(
+                    session_id=session.id,
+                    vocabulary_id=vocabulary.id,
+                    is_correct=False,
+                    response_time_ms=1500
+                )
+                db_session.add(attempt)
+            db_session.commit()
 
     return activities
 
@@ -88,16 +132,36 @@ def test_activity_list_performance(client: TestClient, db_session: Session):
 
 def test_session_creation_performance(client: TestClient, db_session: Session):
     """Test session creation performance."""
-    # Create test activity
+    # Create test activity and vocabulary
+    source_lang = Language(code="en", name="English")
+    target_lang = Language(code="es", name="Spanish")
+    db_session.add_all([source_lang, target_lang])
+    db_session.commit()
+
+    lang_pair = LanguagePair(
+        source_language_id=source_lang.id,
+        target_language_id=target_lang.id
+    )
+    db_session.add(lang_pair)
+    db_session.commit()
+
+    vocabulary = Vocabulary(
+        word="test",
+        translation="test",
+        language_pair_id=lang_pair.id
+    )
+    db_session.add(vocabulary)
+    db_session.commit()
+
     activity = Activity(type="flashcard", name="Performance Test")
+    activity.vocabularies.append(vocabulary)
     db_session.add(activity)
     db_session.commit()
     
-    # Test session creation time
+    # Test session creation time with attempts
     session_data = {
-        "correct_count": 5,
-        "incorrect_count": 2,
-        "success_rate": 0.714
+        "start_time": datetime.now(UTC).isoformat(),
+        "end_time": None
     }
     
     # Measure multiple session creations
@@ -129,10 +193,29 @@ def test_progress_tracking_performance(client: TestClient, db_session: Session):
 
 def test_concurrent_session_updates(client: TestClient, db_session: Session):
     """Test performance of concurrent session updates."""
-    import concurrent.futures
-    
-    # Create test activity
+    # Create test activity and vocabulary
+    source_lang = Language(code="en", name="English")
+    target_lang = Language(code="es", name="Spanish")
+    db_session.add_all([source_lang, target_lang])
+    db_session.commit()
+
+    lang_pair = LanguagePair(
+        source_language_id=source_lang.id,
+        target_language_id=target_lang.id
+    )
+    db_session.add(lang_pair)
+    db_session.commit()
+
+    vocabulary = Vocabulary(
+        word="test",
+        translation="test",
+        language_pair_id=lang_pair.id
+    )
+    db_session.add(vocabulary)
+    db_session.commit()
+
     activity = Activity(type="flashcard", name="Concurrent Test")
+    activity.vocabularies.append(vocabulary)
     db_session.add(activity)
     db_session.commit()
     
@@ -140,9 +223,8 @@ def test_concurrent_session_updates(client: TestClient, db_session: Session):
         return client.post(
             f"/api/v1/activities/{activity.id}/sessions",
             json={
-                "correct_count": 5,
-                "incorrect_count": 2,
-                "success_rate": 0.714
+                "start_time": datetime.now(UTC).isoformat(),
+                "end_time": None
             }
         )
     
@@ -173,9 +255,8 @@ def test_cache_invalidation_performance(client: TestClient, db_session: Session)
     response = client.post(
         f"/api/v1/activities/{activity.id}/sessions",
         json={
-            "correct_count": 5,
-            "incorrect_count": 2,
-            "success_rate": 0.714
+            "start_time": datetime.now(UTC).isoformat(),
+            "end_time": None
         }
     )
     assert response.status_code == 200
@@ -233,3 +314,81 @@ def test_api_stress(client: TestClient, db_session: Session):
     assert avg_time < 0.2, "Average response time too high under load"
     assert max_time < 1.0, "Maximum response time too high under load"
     assert total_time < 5.0, "Total stress test time too high"
+
+def test_session_attempt_performance(client: TestClient, db_session: Session):
+    """Test performance of recording session attempts."""
+    # Create test data
+    source_lang = Language(code="en", name="English")
+    target_lang = Language(code="es", name="Spanish")
+    db_session.add_all([source_lang, target_lang])
+    db_session.commit()
+
+    lang_pair = LanguagePair(
+        source_language_id=source_lang.id,
+        target_language_id=target_lang.id
+    )
+    db_session.add(lang_pair)
+    db_session.commit()
+
+    vocabulary = Vocabulary(
+        word="test",
+        translation="test",
+        language_pair_id=lang_pair.id
+    )
+    db_session.add(vocabulary)
+    db_session.commit()
+
+    activity = Activity(type="flashcard", name="Attempt Test")
+    activity.vocabularies.append(vocabulary)
+    db_session.add(activity)
+    db_session.commit()
+
+    # Create a session
+    session_response = client.post(
+        f"/api/v1/activities/{activity.id}/sessions",
+        json={
+            "start_time": datetime.now(UTC).isoformat(),
+            "end_time": None
+        }
+    )
+    assert session_response.status_code == 200
+    session_id = session_response.json()["id"]
+
+    # Test attempt recording performance
+    attempt_times: List[float] = []
+    for _ in range(10):
+        attempt_data = {
+            "vocabulary_id": vocabulary.id,
+            "is_correct": True,
+            "response_time_ms": 1500
+        }
+        time_taken = measure_response_time(
+            client,
+            f"/api/v1/sessions/{session_id}/attempts",
+            method="POST",
+            data=attempt_data
+        )
+        attempt_times.append(time_taken)
+
+    avg_time = sum(attempt_times) / len(attempt_times)
+    assert avg_time < 0.05, "Session attempt recording too slow"
+
+def test_activity_retrieval_performance(client: TestClient, db_session: Session):
+    """Test performance of retrieving individual activities."""
+    # Create test data
+    activities = create_test_data(db_session, num_activities=5)
+    activity_id = activities[0].id
+
+    # Test cold start retrieval
+    cold_start_time = measure_response_time(
+        client,
+        f"/api/v1/activities/{activity_id}"
+    )
+    assert cold_start_time < 0.1, "Activity retrieval too slow"
+
+    # Test with non-existent activity
+    start_time = time.time()
+    response = client.get("/api/v1/activities/99999")
+    assert response.status_code == 404
+    not_found_time = time.time() - start_time
+    assert not_found_time < 0.1, "Not found response too slow"

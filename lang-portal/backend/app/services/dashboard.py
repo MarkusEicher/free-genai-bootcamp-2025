@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, date, UTC
 from typing import Dict, List, Optional
-from sqlalchemy import func, distinct, and_, case
+from sqlalchemy import func, distinct, and_, case, Index
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.declarative import declared_attr
 
 from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
 from app.schemas.dashboard import (
@@ -11,39 +12,40 @@ from app.schemas.dashboard import (
     StudyStreak
 )
 
+# Add performance indexes
+@declared_attr
+def __table_args__(cls):
+    return (
+        Index('ix_session_attempts_is_correct', 'is_correct'),
+        Index('ix_activity_sessions_start_time', 'start_time'),
+        Index('ix_activity_sessions_activity_id', 'activity_id'),
+    )
+
 class DashboardService:
     @staticmethod
     def get_stats(db: Session) -> DashboardStats:
         """Get dashboard statistics."""
-        # Get total sessions
-        total_sessions = db.query(ActivitySession).count()
-
-        # Calculate overall success rate
-        if total_sessions > 0:
-            success_rate_query = db.query(
-                func.round(
-                    func.sum(case((SessionAttempt.is_correct, 1), else_=0)) * 1.0 / 
-                    func.count(SessionAttempt.id),
-                    3
-                )
-            ).scalar()
-            success_rate = float(success_rate_query or 0.0)
-        else:
-            success_rate = 0.0
-
-        # Get active activities count (activities with at least one session)
-        active_activities = db.query(Activity)\
-            .join(ActivitySession)\
-            .distinct()\
-            .count()
+        # Get all stats in a single query with optimized joins
+        stats = db.query(
+            func.count(distinct(ActivitySession.id)).label('total_sessions'),
+            func.round(
+                func.sum(case((SessionAttempt.is_correct, 1), else_=0)) * 1.0 /
+                func.nullif(func.count(SessionAttempt.id), 0),
+                3
+            ).label('success_rate'),
+            func.count(distinct(Activity.id)).label('active_activities')
+        ).select_from(ActivitySession)\
+        .outerjoin(SessionAttempt)\
+        .outerjoin(Activity)\
+        .first()
 
         # Calculate study streak
         streak = DashboardService._calculate_study_streak(db)
 
         return DashboardStats(
-            success_rate=success_rate,
-            study_sessions_count=total_sessions,
-            active_activities_count=active_activities,
+            success_rate=float(stats.success_rate or 0.0),
+            study_sessions_count=stats.total_sessions,
+            active_activities_count=stats.active_activities,
             study_streak=streak
         )
 
@@ -135,8 +137,11 @@ class DashboardService:
         if not session_dates:
             return StudyStreak(current_streak=0, longest_streak=0)
             
-        # Convert date strings to datetime.date objects
-        dates = [datetime.strptime(str(date[0]), '%Y-%m-%d').date() for date in session_dates]
+        # Convert date strings to datetime.date objects and ensure timezone awareness
+        dates = [
+            datetime.strptime(str(date[0]), '%Y-%m-%d').replace(tzinfo=UTC).date()
+            for date in session_dates
+        ]
         
         # Calculate current streak
         current_streak = 0

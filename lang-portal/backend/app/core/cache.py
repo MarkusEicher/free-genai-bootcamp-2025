@@ -124,24 +124,26 @@ def cache_response(
     return decorator
 
 # Cache invalidation functions
-def invalidate_dashboard_cache():
+def invalidate_dashboard_cache(test_mode: bool = False):
     """Invalidate all dashboard-related caches."""
+    client = test_redis_client if test_mode else redis_client
     try:
-        keys = redis_client.keys("dashboard:*")
+        keys = client.keys("dashboard:*")
         if keys:
-            redis_client.delete(*keys)
+            client.delete(*keys)
         return True
     except Exception as e:
         print(f"Cache invalidation error: {e}")
         return False
 
-def invalidate_stats_cache():
+def invalidate_stats_cache(test_mode: bool = False):
     """Invalidate dashboard stats cache."""
+    client = test_redis_client if test_mode else redis_client
     try:
-        keys = redis_client.keys("dashboard:stats:*")
+        keys = client.keys("dashboard:stats:*")
         if keys:
-            redis_client.delete(*keys)
+            client.delete(*keys)
         return True
     except Exception as e:
         print(f"Stats cache invalidation error: {e}")
-        return False 
+        return False

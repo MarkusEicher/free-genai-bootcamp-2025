@@ -123,76 +123,44 @@ def create_vocabularies_bulk(
 ):
     if not vocabularies:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=VocabularyError(
-                detail="No vocabularies provided",
-                code="empty_vocabulary_list"
-            ).model_dump()
-        )
-
-    # Validate all language pairs first using a single query
-    language_pair_ids = {v.language_pair_id for v in vocabularies}
-    existing_pairs = set(p[0] for p in db.query(LanguagePair.id).filter(
-        LanguagePair.id.in_(language_pair_ids)
-    ).all())
-    
-    missing_pairs = language_pair_ids - existing_pairs
-    if missing_pairs:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=VocabularyError(
-                detail=f"Language pairs not found: {missing_pairs}",
-                code="language_pairs_not_found"
-            ).model_dump()
+            status_code=400,
+            detail={"code": "empty_list", "message": "No vocabularies provided"}
         )
     
-    # Check for duplicates using a single query
-    word_pairs = [(v.word, v.language_pair_id) for v in vocabularies]
-    existing = db.query(Vocabulary.word, Vocabulary.language_pair_id).filter(
-        or_(
-            *(
-                (Vocabulary.word == word) & 
-                (Vocabulary.language_pair_id == pair_id)
-                for word, pair_id in word_pairs
-            )
-        )
-    ).all()
-    
-    if existing:
+    # Check for duplicates
+    words = [(v.word, v.language_pair_id) for v in vocabularies]
+    if len(set(words)) != len(words):
         raise HTTPException(
             status_code=400,
-            detail=VocabularyError(
-                detail=f"Duplicate vocabularies found: {existing}",
-                code="duplicate_vocabularies"
-            ).model_dump()
+            detail={"code": "duplicate_vocabularies", "message": "Duplicate words found"}
         )
     
     try:
-        # Create all vocabularies in a single transaction
-        db_vocabularies = [
-            Vocabulary(**v.model_dump())
-            for v in vocabularies
-        ]
-        db.add_all(db_vocabularies)
+        created_vocabularies = []
+        for vocab_data in vocabularies:
+            vocabulary = Vocabulary(**vocab_data.dict())
+            db.add(vocabulary)
+            created_vocabularies.append(vocabulary)
         db.commit()
         
-        # Refresh all instances in a single query
-        vocab_ids = [v.id for v in db_vocabularies]
-        return db.query(Vocabulary).filter(Vocabulary.id.in_(vocab_ids)).all()
-    except IntegrityError:
+        for vocab in created_vocabularies:
+            db.refresh(vocab)
+        
+        return created_vocabularies
+    except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail=VocabularyError(
-                detail="Invalid data provided",
-                code="invalid_data"
-            ).model_dump()
+            detail={"code": "creation_failed", "message": str(e)}
         )
 
 @router.get("/{vocabulary_id}", response_model=VocabularyRead)
-def get_vocabulary(vocabulary_id: int, db: Session = Depends(get_db)):
+def get_vocabulary(
+    vocabulary_id: int,
+    db: Session = Depends(get_db)
+):
     vocabulary = db.query(Vocabulary).options(
-        db.joinedload(Vocabulary.language_pair)
+        joinedload(Vocabulary.language_pair)
     ).filter(
         Vocabulary.id == vocabulary_id
     ).first()
@@ -200,10 +168,7 @@ def get_vocabulary(vocabulary_id: int, db: Session = Depends(get_db)):
     if not vocabulary:
         raise HTTPException(
             status_code=404,
-            detail=VocabularyError(
-                detail="Vocabulary not found",
-                code="vocabulary_not_found"
-            ).model_dump()
+            detail={"code": "vocabulary_not_found", "message": "Vocabulary not found"}
         )
     return vocabulary
 
@@ -213,9 +178,8 @@ def update_vocabulary(
     vocabulary_update: VocabularyUpdate,
     db: Session = Depends(get_db)
 ):
-    # Get vocabulary with language pair in a single query
     vocabulary = db.query(Vocabulary).options(
-        db.joinedload(Vocabulary.language_pair)
+        joinedload(Vocabulary.language_pair)
     ).filter(
         Vocabulary.id == vocabulary_id
     ).first()
@@ -223,60 +187,45 @@ def update_vocabulary(
     if not vocabulary:
         raise HTTPException(
             status_code=404,
-            detail=VocabularyError(
-                detail="Vocabulary not found",
-                code="vocabulary_not_found"
-            ).model_dump()
+            detail={"code": "vocabulary_not_found", "message": "Vocabulary not found"}
         )
     
-    # Verify language pair if it's being updated
-    if vocabulary_update.language_pair_id and vocabulary_update.language_pair_id != vocabulary.language_pair_id:
-        if not db.query(LanguagePair.id).filter(LanguagePair.id == vocabulary_update.language_pair_id).first():
-            raise HTTPException(
-                status_code=404,
-                detail=VocabularyError(
-                    detail="Language pair not found",
-                    code="language_pair_not_found"
-                ).model_dump()
-            )
+    # Update fields
+    for field, value in vocabulary_update.dict(exclude_unset=True).items():
+        setattr(vocabulary, field, value)
     
     try:
-        for field, value in vocabulary_update.model_dump(exclude_unset=True).items():
-            setattr(vocabulary, field, value)
-        vocabulary.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(vocabulary)
         return vocabulary
-    except IntegrityError:
+    except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail=DuplicateVocabularyError(
-                detail="Vocabulary with this word already exists for this language pair",
-                word=vocabulary.word,
-                language_pair_id=vocabulary.language_pair_id
-            ).model_dump()
+            detail={"code": "update_failed", "message": str(e)}
         )
 
-@router.delete("/{vocabulary_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{vocabulary_id}")
 def delete_vocabulary(vocabulary_id: int, db: Session = Depends(get_db)):
-    result = db.query(Vocabulary).filter(
-        Vocabulary.id == vocabulary_id
-    ).delete(synchronize_session=False)
-    
-    if not result:
+    vocabulary = db.query(Vocabulary).get(vocabulary_id)
+    if not vocabulary:
         raise HTTPException(
             status_code=404,
-            detail=VocabularyError(
-                detail="Vocabulary not found",
-                code="vocabulary_not_found"
-            ).model_dump()
+            detail={"code": "vocabulary_not_found", "message": "Vocabulary not found"}
         )
     
-    db.commit()
-    return None
+    try:
+        db.delete(vocabulary)
+        db.commit()
+        return {"code": "success", "message": "Vocabulary deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "delete_failed", "message": str(e)}
+        )
 
-@router.delete("/bulk", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/bulk", status_code=204)
 def delete_vocabularies_bulk(
     vocabulary_ids: List[int],
     db: Session = Depends(get_db)
@@ -284,25 +233,30 @@ def delete_vocabularies_bulk(
     if not vocabulary_ids:
         raise HTTPException(
             status_code=400,
-            detail=VocabularyError(
-                detail="No vocabulary IDs provided",
-                code="empty_id_list"
-            ).model_dump()
+            detail={"code": "empty_list", "message": "No vocabulary IDs provided"}
         )
     
-    # Delete all vocabularies in one query
-    result = db.query(Vocabulary).filter(
+    # Check if all vocabularies exist
+    existing_ids = db.query(Vocabulary.id).filter(
         Vocabulary.id.in_(vocabulary_ids)
-    ).delete(synchronize_session=False)
+    ).all()
+    existing_ids = [id[0] for id in existing_ids]
     
-    if result == 0:
+    if len(existing_ids) != len(vocabulary_ids):
         raise HTTPException(
             status_code=404,
-            detail=VocabularyError(
-                detail="No vocabularies found with the provided IDs",
-                code="vocabularies_not_found"
-            ).model_dump()
+            detail={"code": "vocabularies_not_found", "message": "Some vocabularies not found"}
         )
     
-    db.commit()
-    return None
+    try:
+        db.query(Vocabulary).filter(
+            Vocabulary.id.in_(vocabulary_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+        return None
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "delete_failed", "message": str(e)}
+        )

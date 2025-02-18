@@ -65,5 +65,14 @@ frontend/dist/
 *.sqlite
 *.db
 .env.*
-!.env.example 
+!.env.example
 *storybook.log
+
+# Database files
+*.sqlite
+*.db
+backend/data/
+
+# Logs
+backend/logs/*
+!backend/logs/.gitkeep
