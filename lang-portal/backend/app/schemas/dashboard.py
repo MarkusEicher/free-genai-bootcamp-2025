@@ -2,8 +2,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 class StudyStreak(BaseModel):
-    current_streak: int = Field(..., description="Current consecutive days of study")
-    longest_streak: int = Field(..., description="Longest study streak achieved")
+    current_streak: int = Field(..., ge=0, description="Current consecutive days of study")
+    longest_streak: int = Field(..., ge=0, description="Longest study streak achieved")
 
 class DashboardStats(BaseModel):
     success_rate: float = Field(..., ge=0, le=1, description="Overall success rate across all activities")
@@ -24,4 +24,4 @@ class LatestSession(BaseModel):
     end_time: datetime | None = Field(None, description="Session end time")
     success_rate: float = Field(..., ge=0, le=1, description="Session success rate")
     correct_count: int = Field(..., ge=0, description="Number of correct answers")
-    incorrect_count: int = Field(..., ge=0, description="Number of incorrect answers") 
+    incorrect_count: int = Field(..., ge=0, description="Number of incorrect answers")
