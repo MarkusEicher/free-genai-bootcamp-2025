@@ -2,9 +2,28 @@ from typing import Any, Optional
 from datetime import timedelta
 import json
 from fastapi import Request
-from redis import Redis
+from redis import Redis, ConnectionPool, ConnectionError
 from functools import wraps
 from app.core.config import settings
+
+# Redis connection pools
+_default_pool = None
+_test_pool = None
+_default_client = None
+_test_client = None
+
+def create_redis_pool(test_mode: bool = False) -> ConnectionPool:
+    """Create a new Redis connection pool."""
+    return ConnectionPool(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        db=settings.REDIS_TEST_DB if test_mode else settings.REDIS_DB,
+        decode_responses=True,
+        max_connections=10000,
+        socket_timeout=5,
+        socket_connect_timeout=5,
+        retry_on_timeout=True
+    )
 
 def get_redis_client(test_mode: bool = False) -> Redis:
     """
@@ -15,14 +34,41 @@ def get_redis_client(test_mode: bool = False) -> Redis:
     
     Returns:
         Redis: Redis client instance
+    
+    Raises:
+        ConnectionError: If Redis connection fails
     """
-    return Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=settings.REDIS_TEST_DB if test_mode else settings.REDIS_DB,
-        password=settings.REDIS_PASSWORD,
-        decode_responses=True
-    )
+    global _default_pool, _test_pool, _default_client, _test_client
+    
+    try:
+        if test_mode:
+            if _test_client is not None:
+                return _test_client
+            
+            if _test_pool is None:
+                _test_pool = create_redis_pool(test_mode=True)
+            _test_client = Redis(connection_pool=_test_pool)
+            # Test connection
+            try:
+                _test_client.ping()
+            except Exception as e:
+                raise ConnectionError(f"Failed to connect to Redis: {str(e)}")
+            return _test_client
+        else:
+            if _default_client is not None:
+                return _default_client
+            
+            if _default_pool is None:
+                _default_pool = create_redis_pool(test_mode=False)
+            _default_client = Redis(connection_pool=_default_pool)
+            # Test connection
+            try:
+                _default_client.ping()
+            except Exception as e:
+                raise ConnectionError(f"Failed to connect to Redis: {str(e)}")
+            return _default_client
+    except Exception as e:
+        raise ConnectionError(f"Failed to connect to Redis: {str(e)}")
 
 # Create default Redis client
 redis_client = get_redis_client()
@@ -57,15 +103,13 @@ class Cache:
             return None
 
     @staticmethod
-    def set(key: str, value: Any, expire: int = 300, test_mode: bool = False) -> bool:
+    def set(key: str, value: Any, expire: Optional[int] = None, test_mode: bool = False) -> bool:
         """Set value in cache with expiration in seconds."""
         client = test_redis_client if test_mode else redis_client
         try:
-            return client.setex(
-                key,
-                expire,
-                json.dumps(value) if not isinstance(value, str) else value
-            )
+            if not isinstance(value, str):
+                value = json.dumps(value)
+            return bool(client.set(key, value, ex=expire if expire is not None else None))
         except Exception as e:
             print(f"Cache set error: {e}")
             return False
@@ -92,15 +136,15 @@ def cache_response(
                 return await func(*args, **kwargs)
 
             # Determine if we're in test mode
-            test_mode = settings.TEST_DATABASE_URL in str(request.app.state.db_engine.url)
+            test_mode = settings.TEST_DATABASE_URL in str(getattr(request.app.state, 'db_engine', ''))
 
             # Build cache key
             key_parts = [prefix, request.url.path]
             
-            if include_query_params:
-                query_params = str(request.query_params)
-                if query_params:
-                    key_parts.append(query_params)
+            # Include query params if specified
+            if include_query_params and request.query_params:
+                sorted_params = sorted(request.query_params.items())
+                key_parts.append(str(sorted_params))
             
             cache_key = Cache.key_builder(*key_parts)
 
@@ -124,7 +168,7 @@ def cache_response(
     return decorator
 
 # Cache invalidation functions
-def invalidate_dashboard_cache(test_mode: bool = False):
+def invalidate_dashboard_cache(test_mode: bool = False) -> bool:
     """Invalidate all dashboard-related caches."""
     client = test_redis_client if test_mode else redis_client
     try:
@@ -136,7 +180,7 @@ def invalidate_dashboard_cache(test_mode: bool = False):
         print(f"Cache invalidation error: {e}")
         return False
 
-def invalidate_stats_cache(test_mode: bool = False):
+def invalidate_stats_cache(test_mode: bool = False) -> bool:
     """Invalidate dashboard stats cache."""
     client = test_redis_client if test_mode else redis_client
     try:

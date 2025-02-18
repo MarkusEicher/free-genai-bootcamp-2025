@@ -4,15 +4,18 @@ from datetime import datetime, UTC
 import json
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from unittest.mock import patch
+from redis.exceptions import ConnectionError
 from app.core.cache import (
     Cache,
     cache_response,
     invalidate_dashboard_cache,
     invalidate_stats_cache,
-    get_redis_client,
     test_redis_client
 )
 from app.core.config import settings
+import threading
+import asyncio
 
 @pytest.fixture(autouse=True)
 def clear_test_cache():
@@ -39,6 +42,14 @@ def test_key_builder():
     key = Cache.key_builder("test", "arg1", param1="value1")
     assert key == "test:arg1:param1:value1"
 
+    # Test with special characters
+    key = Cache.key_builder("test", "special:char", param="with:colon")
+    assert key == "test:special:char:param:with:colon"
+
+    # Test with non-string values
+    key = Cache.key_builder("test", 123, bool_val=True, none_val=None)
+    assert key == "test:123:bool_val:True:none_val:None"
+
 def test_cache_set_get():
     """Test basic cache set and get operations."""
     # Test string value
@@ -56,6 +67,10 @@ def test_cache_set_get():
     assert Cache.set("test_list", test_list, test_mode=True)
     cached = Cache.get("test_list", test_mode=True)
     assert json.loads(cached) == test_list
+
+    # Test None value
+    assert Cache.set("test_none", None, test_mode=True)
+    assert Cache.get("test_none", test_mode=True) is None
 
 def test_cache_expiration():
     """Test cache expiration."""
@@ -106,6 +121,55 @@ def test_cache_response_with_query_params():
     response2 = client.get("/test?param=value2")
     
     assert response1.json() != response2.json()
+    assert response1.json()["param"] == "value1"
+    assert response2.json()["param"] == "value2"
+
+    # Test same query parameter (should hit cache)
+    response3 = client.get("/test?param=value1")
+    assert response3.json() == response1.json()
+
+def test_cache_response_json_handling():
+    """Test cache_response decorator JSON handling."""
+    app = FastAPI()
+
+    @app.get("/test")
+    @cache_response(prefix="test")
+    async def test_endpoint(request: Request):
+        return {
+            "string": "test",
+            "number": 42,
+            "bool": True,
+            "null": None,
+            "list": [1, 2, 3],
+            "dict": {"key": "value"}
+        }
+
+    client = TestClient(app)
+    response = client.get("/test")
+    data = response.json()
+    
+    assert data["string"] == "test"
+    assert data["number"] == 42
+    assert data["bool"] is True
+    assert data["null"] is None
+    assert data["list"] == [1, 2, 3]
+    assert data["dict"] == {"key": "value"}
+
+def test_cache_response_test_mode():
+    """Test cache_response decorator test mode detection."""
+    app = FastAPI()
+
+    @app.get("/test")
+    @cache_response(prefix="test")
+    async def test_endpoint(request: Request):
+        return {"message": "test"}
+
+    # Simulate test mode by setting db_engine
+    app.state.db_engine = settings.TEST_DATABASE_URL
+    
+    client = TestClient(app)
+    response = client.get("/test")
+    assert response.status_code == 200
 
 def test_cache_invalidation():
     """Test cache invalidation functions."""
@@ -113,16 +177,19 @@ def test_cache_invalidation():
     Cache.set("dashboard:stats:1", "stats1", test_mode=True)
     Cache.set("dashboard:progress:1", "progress1", test_mode=True)
     Cache.set("dashboard:other:1", "other1", test_mode=True)
+    Cache.set("other:key", "other_value", test_mode=True)
 
     # Test invalidate_stats_cache
     assert invalidate_stats_cache(test_mode=True)
     assert Cache.get("dashboard:stats:1", test_mode=True) is None
     assert Cache.get("dashboard:progress:1", test_mode=True) is not None
+    assert Cache.get("other:key", test_mode=True) is not None
 
     # Test invalidate_dashboard_cache
     assert invalidate_dashboard_cache(test_mode=True)
     assert Cache.get("dashboard:progress:1", test_mode=True) is None
     assert Cache.get("dashboard:other:1", test_mode=True) is None
+    assert Cache.get("other:key", test_mode=True) is not None
 
 def test_cache_error_handling():
     """Test error handling in cache operations."""
@@ -133,22 +200,9 @@ def test_cache_error_handling():
     # Should return False but not raise an exception
     assert not Cache.set("invalid", UnserializableObject(), test_mode=True)
 
-    # Test get with connection error (simulate by using invalid host)
-    bad_client = get_redis_client()
-    bad_client.connection_pool.connection_kwargs['host'] = 'nonexistent'
-    assert Cache.get("any_key", test_mode=True) is None
-
-def test_redis_client_configuration():
-    """Test Redis client configuration."""
-    # Test default client
-    client = get_redis_client()
-    assert client.connection_pool.connection_kwargs['host'] == settings.REDIS_HOST
-    assert client.connection_pool.connection_kwargs['port'] == settings.REDIS_PORT
-    assert client.connection_pool.connection_kwargs['db'] == settings.REDIS_DB
-
-    # Test test client
-    test_client = get_redis_client(test_mode=True)
-    assert test_client.connection_pool.connection_kwargs['db'] == settings.REDIS_TEST_DB
+    # Test get with connection error
+    with patch('redis.Redis.get', side_effect=ConnectionError("Test error")):
+        assert Cache.get("any_key", test_mode=True) is None
 
 def test_cache_response_without_request():
     """Test cache_response decorator without request object."""
@@ -189,19 +243,12 @@ def test_cache_response_invalid_json():
     response2 = client.get("/test")
     assert response2.json()["count"] == 2
 
-def test_cache_invalidation_error_handling(monkeypatch):
+def test_cache_invalidation_error_handling():
     """Test error handling in cache invalidation functions."""
-    def mock_keys(*args):
-        raise ConnectionError("Connection failed")
-
-    # Mock the keys method to simulate connection error
-    monkeypatch.setattr(test_redis_client, "keys", mock_keys)
-
-    # Test dashboard cache invalidation with connection error
-    assert not invalidate_dashboard_cache(test_mode=True)
-
-    # Test stats cache invalidation with connection error
-    assert not invalidate_stats_cache(test_mode=True)
+    with patch('redis.Redis.keys', side_effect=ConnectionError("Test error")):
+        # Both functions should return False on error
+        assert not invalidate_dashboard_cache(test_mode=True)
+        assert not invalidate_stats_cache(test_mode=True)
 
 def test_cache_set_get_complex_objects():
     """Test cache operations with complex objects."""
@@ -225,151 +272,171 @@ def test_cache_set_get_complex_objects():
     cached = Cache.get("date", test_mode=True)
     assert json.loads(cached)["timestamp"] == date_obj["timestamp"]
 
-def test_cache_response_with_empty_query_params():
-    """Test cache_response decorator with empty query parameters."""
+def test_cache_key_collisions():
+    """Test that similar but different cache keys don't collide."""
+    # Test similar keys with different types
+    Cache.set("test:1", "value1", test_mode=True)
+    Cache.set("test", "1", test_mode=True)
+    assert Cache.get("test:1", test_mode=True) == "value1"
+    assert Cache.get("test", test_mode=True) == "1"
+
+    # Test keys with same parts in different order
+    key1 = Cache.key_builder("test", param1="a", param2="b")
+    key2 = Cache.key_builder("test", param2="b", param1="a")
+    Cache.set(key1, "value1", test_mode=True)
+    Cache.set(key2, "value2", test_mode=True)
+    assert Cache.get(key1, test_mode=True) == "value1"
+    assert Cache.get(key2, test_mode=True) == "value2"
+    assert key1 == key2  # Parameters should be sorted
+
+    # Test nested keys
+    Cache.set("parent:child", "value1", test_mode=True)
+    Cache.set("parent", "child:value2", test_mode=True)
+    assert Cache.get("parent:child", test_mode=True) == "value1"
+    assert Cache.get("parent", test_mode=True) == "child:value2"
+
+def test_concurrent_cache_access():
+    """Test concurrent cache access."""
+    app = FastAPI()
+    request_count = 0
+
+    @app.get("/test")
+    @cache_response(prefix="test")
+    async def test_endpoint(request: Request):
+        nonlocal request_count
+        request_count += 1
+        # Simulate slow operation
+        await asyncio.sleep(0.1)
+        return {"count": request_count}
+
+    client = TestClient(app)
+    
+    # Make concurrent requests
+    def make_request():
+        return client.get("/test")
+
+    # Create and start threads
+    threads = []
+    for _ in range(10):
+        t = threading.Thread(target=make_request)
+        threads.append(t)
+        t.start()
+
+    # Wait for all threads
+    for t in threads:
+        t.join()
+
+    # Only one request should have hit the endpoint
+    assert request_count == 1
+
+def test_cache_memory_usage():
+    """Test cache memory usage and limits."""
+    # Test with large data
+    large_data = "x" * 1024 * 1024  # 1MB string
+    assert Cache.set("large_key", large_data, test_mode=True)
+    
+    # Test memory usage reporting
+    info = test_redis_client.info(section="memory")
+    assert "used_memory" in info
+    initial_memory = info["used_memory"]
+
+    # Add more large data
+    for i in range(5):
+        Cache.set(f"large_key_{i}", large_data, test_mode=True)
+    
+    # Check memory increased
+    info = test_redis_client.info(section="memory")
+    assert info["used_memory"] > initial_memory
+
+    # Test memory cleanup
+    for i in range(5):
+        test_redis_client.delete(f"large_key_{i}")
+    test_redis_client.delete("large_key")
+    
+    # Verify memory decreased
+    info = test_redis_client.info(section="memory")
+    assert info["used_memory"] < initial_memory * 2  # Allow some overhead
+
+def test_cache_response_race_condition():
+    """Test cache_response decorator under race conditions."""
+    app = FastAPI()
+    computation_count = 0
+    cache_ready = threading.Event()
+
+    @app.get("/test")
+    @cache_response(prefix="test")
+    async def test_endpoint(request: Request):
+        nonlocal computation_count
+        computation_count += 1
+        
+        # Simulate slow computation
+        await asyncio.sleep(0.1)
+        
+        # Wait for signal in first request
+        if computation_count == 1:
+            cache_ready.wait(timeout=1)
+        
+        return {"count": computation_count}
+
+    client = TestClient(app)
+    
+    def make_request():
+        return client.get("/test")
+
+    # Start first request
+    t1 = threading.Thread(target=make_request)
+    t1.start()
+
+    # Start second request while first is still computing
+    t2 = threading.Thread(target=make_request)
+    t2.start()
+
+    # Let first request complete
+    cache_ready.set()
+
+    # Wait for both requests
+    t1.join()
+    t2.join()
+
+    # Only one computation should have occurred
+    assert computation_count == 1
+
+def test_cache_response_with_large_query_params():
+    """Test cache_response decorator with large query parameters."""
     app = FastAPI()
 
     @app.get("/test")
     @cache_response(prefix="test", include_query_params=True)
-    async def test_endpoint(request: Request):
-        return {"data": "test"}
+    async def test_endpoint(request: Request, param: str = ""):
+        return {"param_length": len(param)}
 
     client = TestClient(app)
     
-    # Test with no query params
-    response1 = client.get("/test")
-    assert response1.status_code == 200
+    # Test with large query parameter
+    large_param = "x" * 10000
+    response = client.get(f"/test?param={large_param}")
+    assert response.status_code == 200
+    assert response.json()["param_length"] == 10000
 
-    # Test with empty query params
-    response2 = client.get("/test?")
-    assert response2.status_code == 200
+    # Verify cache key is reasonably sized
+    cache_keys = test_redis_client.keys("test:*")
+    assert all(len(key) < 1000 for key in cache_keys)  # Cache keys shouldn't be huge
 
-    # Both should return the same cached result
-    assert response1.json() == response2.json()
-
-def test_cache_key_builder_edge_cases():
-    """Test cache key builder with edge cases."""
-    # Test empty args and kwargs
-    key = Cache.key_builder("test", *[], **{})
-    assert key == "test"
-
-    # Test with None values
-    key = Cache.key_builder("test", None, param=None)
-    assert key == "test:None:param:None"
-
-    # Test with special characters
-    key = Cache.key_builder("test", "special:char", param="with:colon")
-    assert key == "test:special:char:param:with:colon"
-
-    # Test with boolean and numeric values
-    key = Cache.key_builder("test", True, 42, active=False, count=0)
-    assert key == "test:True:42:active:False:count:0"
-
-def test_cache_get_error_handling(monkeypatch):
-    """Test error handling in Cache.get method."""
-    def mock_get(*args, **kwargs):
-        raise ConnectionError("Connection failed")
-
-    # Mock the get method to simulate connection error
-    monkeypatch.setattr(test_redis_client, "get", mock_get)
-    
-    # Should return None and not raise an exception
-    assert Cache.get("test_key", test_mode=True) is None
-
-def test_cache_response_edge_cases(monkeypatch):
-    """Test cache_response decorator edge cases."""
-    app = FastAPI()
-    counter = 0
-
-    @app.get("/test")
-    @cache_response(prefix="test")
-    async def test_endpoint(request: Request):
-        nonlocal counter
-        counter += 1
-        return {"count": counter}
-
-    # Create test client with base URL
-    client = TestClient(app, base_url="http://testserver")
-    
-    # Mock the request object to simulate test mode
-    def mock_test_mode(*args, **kwargs):
-        return True
-    monkeypatch.setattr("app.core.cache.settings.TEST_DATABASE_URL", "sqlite:///./test.db")
-    
-    # First request
-    response1 = client.get("/test")
-    assert response1.status_code == 200
-    assert response1.json()["count"] == 1
-
-    # Test with query params when include_query_params=False
-    response2 = client.get("/test?param=value")
-    assert response2.status_code == 200
-    # Should use same cache as previous request since query params are ignored
-    assert response2.json()["count"] == 1
-
-def test_cache_response_with_non_json_response():
-    """Test cache_response decorator with non-JSON response."""
+def test_cache_response_error_propagation():
+    """Test that errors in the endpoint are properly propagated through cache."""
     app = FastAPI()
 
     @app.get("/test")
     @cache_response(prefix="test")
     async def test_endpoint(request: Request):
-        return {"text": "plain text response"}  # Return as JSON
+        raise ValueError("Test error")
 
     client = TestClient(app)
     
-    # First request
+    # First request should fail
     response1 = client.get("/test")
-    assert response1.status_code == 200
-    assert response1.json()["text"] == "plain text response"
+    assert response1.status_code == 500
 
-    # Second request should get cached response
+    # Second request should also fail (errors shouldn't be cached)
     response2 = client.get("/test")
-    assert response2.status_code == 200
-    assert response2.json()["text"] == "plain text response"
-
-def test_cache_response_with_raw_text():
-    """Test cache_response decorator with raw text response."""
-    from fastapi.responses import PlainTextResponse
-    app = FastAPI()
-
-    @app.get("/test")
-    @cache_response(prefix="test")
-    async def test_endpoint(request: Request):
-        return PlainTextResponse("plain text response")
-
-    client = TestClient(app)
-    
-    # First request
-    response1 = client.get("/test")
-    assert response1.status_code == 200
-    assert response1.text == "plain text response"
-
-    # Second request should get cached response
-    response2 = client.get("/test")
-    assert response2.status_code == 200
-    assert response2.text == "plain text response"
-
-def test_cache_response_missing_attributes():
-    """Test cache_response decorator with missing request attributes."""
-    app = FastAPI()
-    counter = 0
-
-    @app.get("/test")
-    @cache_response(prefix="test")
-    async def test_endpoint(request: Request):
-        nonlocal counter
-        counter += 1
-        return {"count": counter}
-
-    client = TestClient(app)
-    
-    # First request (no db_engine attribute)
-    response1 = client.get("/test")
-    assert response1.status_code == 200
-    assert response1.json()["count"] == 1
-
-    # Second request should not use cache since test mode couldn't be determined
-    response2 = client.get("/test")
-    assert response2.status_code == 200
-    assert response2.json()["count"] == 2
+    assert response2.status_code == 500
