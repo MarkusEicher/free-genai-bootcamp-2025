@@ -8,7 +8,8 @@ from app.api.v1.endpoints import (
     statistics,
     vocabulary,
     activities,
-    dashboard
+    dashboard,
+    admin
 )
 
 app = FastAPI(
@@ -34,6 +35,7 @@ app.include_router(statistics.router, prefix="/api/v1/statistics", tags=["statis
 app.include_router(vocabulary.router, prefix="/api/v1/vocabularies", tags=["vocabulary"])
 app.include_router(activities.router, prefix="/api/v1", tags=["activities"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
 # Health check endpoint
 @app.get("/health")
