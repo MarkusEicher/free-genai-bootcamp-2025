@@ -1,25 +1,45 @@
 from datetime import datetime, UTC
 from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict, constr
+from pydantic import BaseModel, Field, ConfigDict, constr, validator
 
 class ActivityBase(BaseModel):
     type: str = Field(..., description="Type of activity (e.g., flashcard, typing, quiz)", min_length=1)
     name: constr(min_length=1) = Field(..., description="Name of the activity")
     description: Optional[str] = Field(None, description="Description of the activity")
+    practice_direction: str = Field("forward", description="Practice direction (forward or reverse)")
+
+    @validator("practice_direction")
+    def validate_practice_direction(cls, v):
+        if v not in ["forward", "reverse"]:
+            raise ValueError("practice_direction must be 'forward' or 'reverse'")
+        return v
 
 class ActivityCreate(ActivityBase):
-    pass
+    vocabulary_group_ids: List[int] = Field(..., description="List of vocabulary group IDs")
 
 class ActivityUpdate(BaseModel):
     type: Optional[str] = Field(None, description="Type of activity")
     name: Optional[str] = Field(None, description="Name of the activity")
     description: Optional[str] = Field(None, description="Description of the activity")
+    practice_direction: Optional[str] = Field(None, description="Practice direction")
+    vocabulary_group_ids: Optional[List[int]] = Field(None, description="List of vocabulary group IDs")
+
+    @validator("practice_direction")
+    def validate_practice_direction(cls, v):
+        if v is not None and v not in ["forward", "reverse"]:
+            raise ValueError("practice_direction must be 'forward' or 'reverse'")
+        return v
+
+class VocabularyGroupBrief(BaseModel):
+    id: int
+    name: str
 
 class ActivityResponse(ActivityBase):
     model_config = ConfigDict(from_attributes=True)
     
     id: int
     created_at: datetime
+    vocabulary_groups: List[VocabularyGroupBrief]
 
 class SessionBase(BaseModel):
     start_time: datetime = Field(default_factory=lambda: datetime.now(UTC))

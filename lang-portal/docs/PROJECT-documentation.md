@@ -1,4 +1,6 @@
-# LangPortal Application Specifications
+# Project Documentation for the Language Learning Portal Application
+
+> This document contains the ***PROJECT*** documentation for the Language Learning Portal Application. It is a living document that will be updated as we add more features and updates. It is originally based on the specifications and requirements of the Language Learning Portal Application built during the free Exampro GenAI Bootcamp 2025. (see /lang-portal/docs/BUSINESS-REQUIREMENTS.md)
 
 ## Tech Stack
 
@@ -10,14 +12,125 @@
 - TypeScript
 - Jest & React Testing Library
 - There will no authentication or authorization
-Everything be treated as a single user
+- Everything be treated as a single user
 
 ### Backend
-- Next.js 14+ (App Router)
-- Prisma ORM
+- FastAPI 
+- Python 3.12+ <4.0
 - SQLite3 database
-- Jest for testing
+- SQLAlchemy ORM
+- pytest
 - TypeScript
+
+- The backend is built on a modern Python-based microservices stack, utilizing FastAPI for high-performance API development with automatic OpenAPI documentation. Core functionality is supported by SQLAlchemy ORM for database operations, Redis for caching, and Pydantic for data validation, while dependency management is handled by Poetry. The system uses pytest for comprehensive testing and Alembic for database migrations, ensuring a robust and maintainable codebase.
+
+## Database and Schema
+
+The application uses SQLite3 as the database backend, with SQLAlchemy as the ORM layer. The schema is designed to support language learning activities with a focus on vocabulary management and progress tracking.
+
+### Core Models
+
+#### Languages and Pairs
+```python
+# Language model for supported languages
+class Language:
+    id: Integer
+    code: String(2)      # ISO 639-1 code (e.g., 'en', 'es')
+    name: String         # Full name (e.g., 'English', 'Spanish')
+
+# Language pairs for translation direction
+class LanguagePair:
+    id: Integer
+    source_language_id: ForeignKey(Language)
+    target_language_id: ForeignKey(Language)
+```
+
+#### Vocabulary Management
+```python
+# Core vocabulary items
+class Vocabulary:
+    id: Integer
+    word: String
+    translation: String
+    language_pair_id: ForeignKey(LanguagePair)
+    created_at: DateTime
+    updated_at: DateTime
+
+# Vocabulary grouping
+class VocabularyGroup:
+    id: Integer
+    name: String
+    description: String
+    language_pair_id: ForeignKey(LanguagePair)
+    created_at: DateTime
+    updated_at: DateTime
+```
+
+#### Learning Activities
+```python
+# Activity definitions
+class Activity:
+    id: Integer
+    type: String        # e.g., 'flashcard', 'quiz', 'typing'
+    name: String
+    description: String
+    created_at: DateTime
+
+# Learning sessions
+class Session:
+    id: Integer
+    activity_id: ForeignKey(Activity)
+    start_time: DateTime
+    end_time: DateTime
+    created_at: DateTime
+
+# Session attempts
+class SessionAttempt:
+    id: Integer
+    session_id: ForeignKey(Session)
+    vocabulary_id: ForeignKey(Vocabulary)
+    is_correct: Boolean
+    response_time_ms: Integer
+    created_at: DateTime
+```
+
+#### Progress Tracking
+```python
+# Vocabulary progress
+class VocabularyProgress:
+    id: Integer
+    vocabulary_id: ForeignKey(Vocabulary)
+    correct_attempts: Integer
+    incorrect_attempts: Integer
+    last_reviewed: DateTime
+    mastered: Boolean
+    created_at: DateTime
+    updated_at: DateTime
+```
+
+### Key Relationships
+
+- Each `Vocabulary` belongs to a `LanguagePair`
+- `VocabularyGroup` can contain multiple `Vocabulary` items through `vocabulary_group_association`
+- `Activity` is currently associated with individual `Vocabulary` items through `activity_vocabulary`
+  - Note: Direct association with `VocabularyGroups` is not currently supported
+  - To use a VocabularyGroup in an activity, individual Vocabulary items from the group need to be associated
+- `Session` tracks attempts for specific activities
+- `VocabularyProgress` maintains learning progress for each vocabulary item
+
+Note: The current model structure might need enhancement to better support activities working with both individual vocabulary items and vocabulary groups simultaneously. This could be achieved by either:
+1. Adding a direct Activity-VocabularyGroup relationship
+2. Implementing logic to automatically include all Vocabulary items from selected groups
+3. Creating a more flexible activity-content association model
+
+### Performance Optimizations
+
+- Indexes on frequently queried fields
+- Foreign key constraints for data integrity
+- Proper relationship loading strategies
+- Efficient query patterns through SQLAlchemy
+
+The schema is designed to be extensible for future features while maintaining simplicity for the current requirements. All models include appropriate timestamps for tracking creation and updates, and the relationships are optimized for common query patterns in language learning applications.
 
 ## Application Structure
 

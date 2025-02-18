@@ -1,8 +1,13 @@
-# Language Learning Portal - Backend
+# Backend Implementation Documentation for the Language Learning Portal Application
+
+> This repository contains the ***BACKEND*** implementation for the language learning portal.You can find the complete documentation for the project in the /lang-portal-docs folder. This README is a quick start guide to help you get the ***BACKEND*** up and running. For more detailed documentation, please refer to the (lang-portal/docs folder).The documents that are named starting with BACKEND- are the ones that are related to the BACKEND implementation.
+
 
 ## Prerequisites
-- Python >= 3.8.1
-- Poetry (for development)
+
+- Python ">=3.12,<4.0"
+- Poetry (for dependency management)
+- Redis (for caching)
 
 ## Installation
 
@@ -12,18 +17,29 @@
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
-2. Install dependencies:
+2. Install Redis:
+```bash
+# Ubuntu/Debian
+sudo apt-get install redis-server
+
+# macOS
+brew install redis
+
+# Windows
+# Download from https://redis.io/download
+```
+
+3. Install dependencies:
 ```bash
 cd backend
 poetry install
-poetry shell
 ```
 
 ### Alternative Setup (using pip)
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 pip install -r requirements.txt  # For production
 # OR
 pip install -r requirements-dev.txt  # For development
@@ -35,21 +51,34 @@ pip install -r requirements-dev.txt  # For development
 - Run `poetry update` to update dependencies
 
 ## Running the Application
+1. Start Redis server:
+```bash
+# Linux/macOS
+redis-server
+
+# Windows
+redis-server.exe
+```
+
+2. Start the application:
 ```bash
 # Development mode
-poetry run uvicorn app.main:app --reload
+uvicorn app.main:app --reload
 
 # Production mode
-poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Testing
 ```bash
 # Run all tests
-poetry run pytest
+pytest
 
 # Run tests with coverage report
-poetry run pytest --cov=app tests/
+pytest --cov=app tests/
+
+# Run specific tests with coverage
+pytest tests/api/test_dashboard.py --cov=app.api.v1.endpoints.dashboard --cov=app.services.dashboard --cov-report=term-missing
 ```
 
 ## Project Structure
@@ -57,24 +86,28 @@ poetry run pytest --cov=app tests/
 backend/
 ├── app/                  # Main application package
 │   ├── api/             # API endpoints
+│   │   └── v1/          # API version 1
 │   ├── core/            # Core functionality
-│   ├── models/          # Database models
-│   └── schemas/         # Pydantic schemas
+│   ├── models/          # SQLAlchemy models
+│   ├── schemas/         # Pydantic schemas
+│   └── services/        # Business logic
 ├── tests/               # Tests
-└── docs/               # Documentation
+├── data/               # SQLite database files (not in version control)
+└── logs/               # Log files (not in version control)
 ```
-
-## Development Guidelines
-- Follow PEP 8
-- Write tests for new features
-- Update documentation
 
 ## Environment Variables
 Create a `.env` file in the root directory with the following variables:
-```
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-SECRET_KEY=your-secret-key
-ENVIRONMENT=development
+```bash
+# Database configuration
+DATABASE_URL="sqlite:///data/app.db"
+TEST_DATABASE_URL="sqlite:///data/test.db"
+
+# Redis configuration
+REDIS_HOST="localhost"
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_TEST_DB=1
 ```
 
 ## API Documentation

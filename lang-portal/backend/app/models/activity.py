@@ -3,11 +3,11 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.base_class import Base
-from app.models.associations import activity_vocabulary
+from app.models.associations import activity_vocabulary_group
 
-# Add indexes to the existing activity_vocabulary table
-Index('ix_activity_vocabulary_activity_id', activity_vocabulary.c.activity_id)
-Index('ix_activity_vocabulary_vocabulary_id', activity_vocabulary.c.vocabulary_id)
+# Add indexes to the activity_vocabulary_group table
+Index('ix_activity_vocabulary_group_activity_id', activity_vocabulary_group.c.activity_id)
+Index('ix_activity_vocabulary_group_group_id', activity_vocabulary_group.c.group_id)
 
 class Activity(Base):
     __tablename__ = 'activities'
@@ -20,10 +20,23 @@ class Activity(Base):
     type = Column(String, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String)
+    practice_direction = Column(String, nullable=False, server_default='forward')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sessions = relationship("Session", back_populates="activity")
-    vocabularies = relationship("Vocabulary", secondary=activity_vocabulary)
+    vocabulary_groups = relationship(
+        "VocabularyGroup",
+        secondary=activity_vocabulary_group,
+        back_populates="activities"
+    )
+
+    def get_practice_vocabulary(self) -> list:
+        """Get vocabulary items in correct practice direction."""
+        items = []
+        reverse = self.practice_direction == "reverse"
+        for group in self.vocabulary_groups:
+            items.extend(group.get_practice_items(reverse=reverse))
+        return items
 
 class Session(Base):
     __tablename__ = 'sessions'

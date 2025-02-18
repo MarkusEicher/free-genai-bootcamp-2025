@@ -1,4 +1,6 @@
-# Backend Specs
+# Business Requirements and Constraints
+
+> This document contains the ***BUSINESS*** requirements and constraints for the project. It is a living document that will be updated as we add more requirements. It is based on the specifications and requirements of the Language Learning Portal Application built during the ***free Exampro GenAI Bootcamp 2025***.
 
 ## Business Goal:
 
@@ -8,16 +10,13 @@ A language learning school wants to build a prototype of learning portal which w
 - A unified launchpad to launch different learning apps
 
 
-## Technical Requirements
+## Technical Requirements and Constraints
 
-- The backend will be built using node.js and express.
-- The database will be built using SQLite3.
+- The database will be SQLite3.
 - The API will be built using OpenAPI (Swagger).
 - The api will always return JSON objects.
 - There is no need for authentication and authorization.
 - Everything will be in the scope of a single user.
-- Our database will be a single sqlite database called `words.db` 
-- This database will be in the root of the project folder of `backend-next
 
 
 ## API Endpoints
@@ -193,4 +192,3 @@ This structure provides:
 2. Organized directory structure following Node.js/Express best practices
 3. Comprehensive database schema with necessary tables and relationships
 4. Support for all features shown in the frontend specs
-
