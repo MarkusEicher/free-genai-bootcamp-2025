@@ -36,4 +36,8 @@ filterwarnings = [
     "ignore::pydantic.PydanticDeprecatedSince20",
     "ignore::DeprecationWarning:httpx.*"
 ]
+cache_dir = ".pytest_cache"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--cov=app --cov-report=term-missing"
 

@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, date, UTC
 from typing import Dict, List, Optional
-from sqlalchemy import func, distinct, and_, case, Index
-from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct, and_, case, select, Index
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.ext.declarative import declared_attr
 
 from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
+from app.models.vocabulary_group import VocabularyGroup
+from app.models.vocabulary import Vocabulary
 from app.schemas.dashboard import (
     DashboardStats,
     DashboardProgress,
@@ -33,10 +35,12 @@ class DashboardService:
                 func.nullif(func.count(SessionAttempt.id), 0),
                 3
             ).label('success_rate'),
-            func.count(distinct(Activity.id)).label('active_activities')
+            func.count(distinct(Activity.id)).label('active_activities'),
+            func.count(distinct(VocabularyGroup.id)).label('active_groups')
         ).select_from(ActivitySession)\
         .outerjoin(SessionAttempt)\
         .outerjoin(Activity)\
+        .outerjoin(Activity.vocabulary_groups.of_type(VocabularyGroup))\
         .first()
 
         # Calculate study streak
@@ -46,17 +50,21 @@ class DashboardService:
             success_rate=float(stats.success_rate or 0.0),
             study_sessions_count=stats.total_sessions,
             active_activities_count=stats.active_activities,
+            active_groups_count=stats.active_groups,
             study_streak=streak
         )
 
     @staticmethod
     def get_progress(db: Session) -> DashboardProgress:
         """Get learning progress statistics."""
-        # Get total vocabulary items with attempts
-        total_items = db.query(distinct(SessionAttempt.vocabulary_id))\
-            .join(ActivitySession)\
-            .join(Activity)\
-            .count()
+        # Get total vocabulary items from all groups used in activities
+        total_items_subq = select([func.count(distinct(Vocabulary.id))])\
+            .select_from(Activity)\
+            .join(Activity.vocabulary_groups)\
+            .join(VocabularyGroup.vocabularies)\
+            .scalar_subquery()
+
+        total_items = db.execute(total_items_subq).scalar() or 0
 
         if total_items == 0:
             return DashboardProgress(
@@ -67,7 +75,8 @@ class DashboardService:
             )
 
         # Get studied items (at least one attempt)
-        studied_items = total_items
+        studied_items = db.query(func.count(distinct(SessionAttempt.vocabulary_id)))\
+            .scalar() or 0
 
         # Calculate mastery (items with success rate >= 80%)
         mastery_threshold = 0.8
@@ -103,8 +112,13 @@ class DashboardService:
         if limit < 1 or limit > 50:
             limit = 5
 
+        # Get sessions with activity and group information
         sessions = db.query(ActivitySession)\
             .join(Activity)\
+            .options(
+                joinedload(ActivitySession.activity)
+                .joinedload(Activity.vocabulary_groups)
+            )\
             .order_by(ActivitySession.start_time.desc())\
             .limit(limit)\
             .all()
@@ -113,6 +127,8 @@ class DashboardService:
             LatestSession(
                 activity_name=session.activity.name,
                 activity_type=session.activity.type,
+                practice_direction=session.activity.practice_direction,
+                group_count=len(session.activity.vocabulary_groups),
                 start_time=session.start_time,
                 end_time=session.end_time,
                 success_rate=session.success_rate,

@@ -9,10 +9,11 @@ class DashboardStats(BaseModel):
     success_rate: float = Field(..., ge=0, le=1, description="Overall success rate across all activities")
     study_sessions_count: int = Field(..., ge=0, description="Total number of study sessions")
     active_activities_count: int = Field(..., ge=0, description="Number of active activities")
+    active_groups_count: int = Field(..., ge=0, description="Number of vocabulary groups in use")
     study_streak: StudyStreak = Field(..., description="Current and longest study streaks")
 
 class DashboardProgress(BaseModel):
-    total_items: int = Field(..., ge=0, description="Total number of vocabulary items")
+    total_items: int = Field(..., ge=0, description="Total number of vocabulary items in active groups")
     studied_items: int = Field(..., ge=0, description="Number of items studied at least once")
     mastered_items: int = Field(..., ge=0, description="Number of items mastered (success rate > 80%)")
     progress_percentage: float = Field(..., ge=0, le=100, description="Overall progress percentage")
@@ -20,6 +21,8 @@ class DashboardProgress(BaseModel):
 class LatestSession(BaseModel):
     activity_name: str = Field(..., description="Name of the activity")
     activity_type: str = Field(..., description="Type of activity (flashcard, quiz, etc.)")
+    practice_direction: str = Field(..., description="Practice direction (forward/reverse)")
+    group_count: int = Field(..., ge=0, description="Number of vocabulary groups in the activity")
     start_time: datetime = Field(..., description="Session start time")
     end_time: datetime | None = Field(None, description="Session end time")
     success_rate: float = Field(..., ge=0, le=1, description="Session success rate")
