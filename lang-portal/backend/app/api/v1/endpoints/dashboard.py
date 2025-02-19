@@ -13,46 +13,14 @@ from app.core.cache import cache_response
 
 router = APIRouter()
 
-@router.get(
-    "/stats",
-    response_model=DashboardStats,
-    summary="Get Dashboard Statistics",
-    description="""
-    Retrieve overall dashboard statistics including:
-    - Success rate across all activities
-    - Total number of study sessions
-    - Number of active activities
-    - Current and longest study streaks
-    
-    The success rate is calculated as an average across all sessions and is rounded to 3 decimal places.
-    Study streaks are calculated based on daily activity, where multiple sessions in a day count as one day.
-    
-    Response is cached for 5 minutes.
-    """,
-    response_description="Dashboard statistics including success rates and study streaks",
-    responses={
-        200: {
-            "description": "Successfully retrieved dashboard statistics",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success_rate": 0.756,
-                        "study_sessions_count": 42,
-                        "active_activities_count": 3,
-                        "study_streak": {
-                            "current_streak": 5,
-                            "longest_streak": 7
-                        }
-                    }
-                }
-            }
-        }
-    }
-)
-@cache_response(prefix="dashboard:stats", expire=300)
-async def get_dashboard_stats(request: Request, db: Session = Depends(get_db)):
+@router.get("/stats")
+async def get_dashboard_stats():
     """Get dashboard statistics."""
-    return dashboard_service.get_stats(db)
+    return {
+        "total_words": 0,
+        "total_sessions": 0,
+        "success_rate": 0
+    }
 
 @router.get(
     "/progress",

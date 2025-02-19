@@ -7,13 +7,17 @@ import glob
 import json
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
+from pathlib import Path
 
 from app.core.config import settings
 from app.db.database import get_db, engine
-from app.core.cache import redis_client
+from app.core.cache import LocalCache
 from app.db.base_class import Base
 
 router = APIRouter()
+
+# Get cache instance
+cache = LocalCache.get_instance()
 
 # Test management functions
 def count_tests() -> int:
@@ -151,55 +155,50 @@ async def list_models() -> Dict[str, Any]:
     
     return models
 
-# Redis inspection endpoints
-@router.get("/redis/info")
-async def get_redis_info() -> Dict[str, Any]:
-    """Get Redis server information."""
-    info = redis_client.info()
+# Cache inspection endpoints
+@router.get("/cache/info")
+async def get_cache_info() -> Dict[str, Any]:
+    """Get cache information."""
+    cache_dir = Path(settings.CACHE_DIR)
+    cache_files = list(cache_dir.glob("*.cache"))
+    
+    total_size = sum(f.stat().st_size for f in cache_files)
+    
     return {
-        "server_info": {
-            "version": info["redis_version"],
-            "uptime_days": info["uptime_in_days"],
-            "connected_clients": info["connected_clients"]
-        },
-        "memory": {
-            "used_memory_human": info["used_memory_human"],
-            "peak_memory_human": info["used_memory_peak_human"],
-            "max_memory_human": info.get("maxmemory_human", "unlimited")
-        },
+        "cache_type": "local_file",
+        "cache_dir": str(cache_dir),
         "stats": {
-            "total_connections_received": info["total_connections_received"],
-            "total_commands_processed": info["total_commands_processed"],
-            "instantaneous_ops_per_sec": info["instantaneous_ops_per_sec"],
-            "total_keys": redis_client.dbsize()
+            "total_files": len(cache_files),
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2)
         }
     }
 
-@router.get("/redis/keys")
-async def list_redis_keys(pattern: str = "*") -> Dict[str, Any]:
-    """List Redis keys matching a pattern."""
-    keys = redis_client.keys(pattern)
+@router.get("/cache/keys")
+async def list_cache_keys(pattern: str = "*") -> Dict[str, Any]:
+    """List cache keys matching a pattern."""
+    cache_dir = Path(settings.CACHE_DIR)
+    cache_files = list(cache_dir.glob("*.cache"))
     key_info = []
     
-    for key in keys[:100]:  # Limit to 100 keys for performance
+    for cache_file in cache_files[:100]:  # Limit to 100 files for performance
         try:
-            key_type = redis_client.type(key)
-            ttl = redis_client.ttl(key)
-            
-            key_info.append({
-                "key": key,
-                "type": key_type,
-                "ttl": ttl if ttl > -1 else None,
-                "size": redis_client.memory_usage(key)
-            })
+            with cache_file.open("r") as f:
+                content = json.load(f)
+                key_info.append({
+                    "file": cache_file.name,
+                    "created_at": content.get("created_at"),
+                    "expires_at": content.get("expires_at"),
+                    "size_bytes": cache_file.stat().st_size
+                })
         except Exception as e:
             key_info.append({
-                "key": key,
+                "file": cache_file.name,
                 "error": str(e)
             })
     
     return {
-        "total_keys": len(keys),
+        "total_keys": len(cache_files),
         "displayed_keys": len(key_info),
         "keys": key_info
     }
@@ -248,12 +247,12 @@ async def view_logs(
             else:
                 start = (current_line % lines)
                 log_lines = ring_buffer[start:] + ring_buffer[:start]
-        
-        return {
-            "level": level,
-            "lines": log_lines,
-            "total_lines": current_line
-        }
+            
+            return {
+                "level": level,
+                "lines": log_lines,
+                "total_lines": current_line
+            }
     except Exception as e:
         raise HTTPException(
             status_code=500,

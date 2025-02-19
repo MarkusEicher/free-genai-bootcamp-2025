@@ -1,46 +1,66 @@
-import apiClient from './client'
-
-export interface Session {
-  id: number
-  date: string
-  activities: {
-    id: number
-    name: string
-    score: number
-  }[]
-  overallScore: number
-}
-
-export interface SessionStats {
-  wordsLearned: number
-  currentStreak: number
-  successRate: number
-  totalMinutes: number
-  recentActivity: Array<{
-    type: string
-    date: string
-    details: string
-  }>
-}
+import { fetchApi } from './config';
+import type { Session, SessionStats } from '../types/sessions';
 
 export const sessionsApi = {
-  getAll: async (): Promise<Session[]> => {
-    const response = await apiClient.get<Session[]>('/sessions')
-    return response.data
-  },
-  
-  getById: async (id: number): Promise<Session> => {
-    const response = await apiClient.get<Session>(`/sessions/${id}`)
-    return response.data
-  },
-  
-  create: async (): Promise<Session> => {
-    const response = await apiClient.post<Session>('/sessions')
-    return response.data
-  },
+  // Get all sessions
+  getSessions: () => 
+    fetchApi<Session[]>('sessions'),
 
-  updateStats: async (stats: SessionStats): Promise<SessionStats> => {
-    const response = await apiClient.put<SessionStats>('/sessions/stats', stats)
-    return response.data
-  }
-}
+  // Get session statistics
+  getSessionStats: () =>
+    fetchApi<SessionStats>('sessions/stats'),
+
+  // Get a single session
+  getSession: (id: number) =>
+    fetchApi<Session>(`sessions/${id}`),
+
+  // Create a new session
+  createSession: (sessionData: Omit<Session, 'id'>) =>
+    fetchApi<Session>('sessions', {
+      method: 'POST',
+      body: JSON.stringify(sessionData),
+    }),
+
+  // Update a session
+  updateSession: (session: Session) =>
+    fetchApi<Session>(`sessions/${session.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(session),
+    }),
+
+  // Delete a session
+  deleteSession: (id: number) =>
+    fetchApi<void>(`sessions/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Get latest sessions
+  getLatestSessions: (limit: number = 5) =>
+    fetchApi<Session[]>(`sessions/latest?limit=${limit}`),
+
+  // Get previous session
+  getPreviousSession: (currentSessionId: number) =>
+    fetchApi<Session>(`sessions/${currentSessionId}/previous`),
+
+  // Get last session
+  getLastSession: () =>
+    fetchApi<Session>('sessions/last'),
+
+  // Get session history
+  getSessionHistory: () =>
+    fetchApi<Session[]>('sessions/history'),
+
+  // Start practice session
+  startPracticeSession: (data: { type: string; wordIds?: number[] }) =>
+    fetchApi<Session>('sessions/practice/start', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Submit session answer
+  submitAnswer: (sessionId: number, data: { wordId: number; correct: boolean }) =>
+    fetchApi<void>(`sessions/${sessionId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};

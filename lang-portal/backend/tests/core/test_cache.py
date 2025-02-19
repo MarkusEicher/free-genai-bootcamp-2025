@@ -1,6 +1,6 @@
 """Tests for the cache module."""
 import pytest
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 import json
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -11,11 +11,14 @@ from app.core.cache import (
     cache_response,
     invalidate_dashboard_cache,
     invalidate_stats_cache,
-    test_redis_client
+    test_redis_client,
+    LocalCache
 )
 from app.core.config import settings
 import threading
 import asyncio
+from pathlib import Path
+import time
 
 @pytest.fixture(autouse=True)
 def clear_test_cache():
@@ -23,6 +26,28 @@ def clear_test_cache():
     test_redis_client.flushdb()
     yield
     test_redis_client.flushdb()
+
+@pytest.fixture
+def test_cache():
+    """Create a test cache instance with a temporary directory."""
+    cache_dir = Path(settings.BACKEND_DIR) / "data" / "test_cache"
+    original_cache_dir = settings.CACHE_DIR
+    
+    # Update settings for test
+    settings.CACHE_DIR = str(cache_dir)
+    
+    # Create fresh cache instance
+    cache = LocalCache()
+    cache._cache_dir = cache_dir
+    cache._cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    yield cache
+    
+    # Cleanup
+    for file in cache_dir.glob("*.cache"):
+        file.unlink()
+    cache_dir.rmdir()
+    settings.CACHE_DIR = original_cache_dir
 
 def test_key_builder():
     """Test cache key building."""
@@ -50,38 +75,136 @@ def test_key_builder():
     key = Cache.key_builder("test", 123, bool_val=True, none_val=None)
     assert key == "test:123:bool_val:True:none_val:None"
 
-def test_cache_set_get():
+def test_cache_set_get(test_cache):
     """Test basic cache set and get operations."""
-    # Test string value
-    assert Cache.set("test_key", "test_value", test_mode=True)
-    assert Cache.get("test_key", test_mode=True) == "test_value"
+    # Test setting and getting string
+    assert test_cache.set("test_key", "test_value")
+    assert test_cache.get("test_key") == "test_value"
+    
+    # Test setting and getting dict
+    data = {"key": "value", "number": 42}
+    assert test_cache.set("test_dict", data)
+    assert test_cache.get("test_dict") == data
+    
+    # Test setting and getting list
+    data = [1, 2, 3, "test"]
+    assert test_cache.set("test_list", data)
+    assert test_cache.get("test_list") == data
 
-    # Test dict value
-    test_dict = {"key": "value", "number": 42}
-    assert Cache.set("test_dict", test_dict, test_mode=True)
-    cached = Cache.get("test_dict", test_mode=True)
-    assert json.loads(cached) == test_dict
-
-    # Test list value
-    test_list = [1, 2, "three", {"four": 4}]
-    assert Cache.set("test_list", test_list, test_mode=True)
-    cached = Cache.get("test_list", test_mode=True)
-    assert json.loads(cached) == test_list
-
-    # Test None value
-    assert Cache.set("test_none", None, test_mode=True)
-    assert Cache.get("test_none", test_mode=True) is None
-
-def test_cache_expiration():
-    """Test cache expiration."""
-    # Set with short expiration
-    assert Cache.set("expire_key", "value", expire=1, test_mode=True)
-    assert Cache.get("expire_key", test_mode=True) == "value"
+def test_cache_expiration(test_cache):
+    """Test cache expiration functionality."""
+    # Set cache with 1 second expiration
+    assert test_cache.set("expire_key", "expire_value", expire=1)
+    assert test_cache.get("expire_key") == "expire_value"
     
     # Wait for expiration
-    import time
-    time.sleep(2)
-    assert Cache.get("expire_key", test_mode=True) is None
+    time.sleep(1.1)
+    assert test_cache.get("expire_key") is None
+    
+    # Verify cache file is deleted
+    assert not list(test_cache._cache_dir.glob("*.cache"))
+
+def test_cache_privacy(test_cache):
+    """Test privacy aspects of cache implementation."""
+    sensitive_data = {
+        "user_id": "12345",
+        "session_id": "abcdef",
+        "tracking_data": {"visits": 10}
+    }
+    
+    # Verify cache files use hash for names
+    test_cache.set("sensitive_key", sensitive_data)
+    cache_files = list(test_cache._cache_dir.glob("*.cache"))
+    assert len(cache_files) == 1
+    assert cache_files[0].name.endswith(".cache")
+    assert not "sensitive" in cache_files[0].name
+    
+    # Verify cache file content is not plaintext
+    with cache_files[0].open("r") as f:
+        content = json.load(f)
+        assert "sensitive_key" not in str(content)
+        assert isinstance(content, dict)
+        assert "value" in content
+        assert "created_at" in content
+
+def test_cache_cleanup(test_cache):
+    """Test automatic cache cleanup of expired entries."""
+    # Create some expired cache entries
+    expired_time = (datetime.now() - timedelta(hours=1)).isoformat()
+    
+    cache_file = test_cache._cache_dir / "expired.cache"
+    with cache_file.open("w") as f:
+        json.dump({
+            "value": "expired_data",
+            "created_at": expired_time,
+            "expires_at": expired_time
+        }, f)
+    
+    # Create new cache instance to trigger cleanup
+    new_cache = LocalCache()
+    new_cache._cache_dir = test_cache._cache_dir
+    
+    # Verify expired cache is cleaned up
+    assert not cache_file.exists()
+
+def test_cache_response_decorator():
+    """Test the cache_response decorator privacy features."""
+    @cache_response(prefix="test")
+    async def test_endpoint(request=None):
+        return {"data": "test"}
+    
+    class MockRequest:
+        def __init__(self):
+            self.url = type('Url', (), {'path': '/test'})()
+            self.query_params = {
+                'user_id': '12345',
+                'session': 'abcdef',
+                'limit': '10',
+                'offset': '0'
+            }
+    
+    # Test that sensitive query params are excluded from cache key
+    request = MockRequest()
+    cache_key = ":".join(["test", "/test", str(sorted([
+        ('limit', '10'),
+        ('offset', '0')
+    ]))])
+    
+    # Run the endpoint
+    import asyncio
+    result = asyncio.run(test_endpoint(request))
+    
+    # Verify result
+    assert result == {"data": "test"}
+    
+    # Verify cache file exists with correct key
+    cache_dir = Path(settings.CACHE_DIR)
+    cache_files = list(cache_dir.glob("*.cache"))
+    assert len(cache_files) == 1
+    
+    # Clean up
+    for file in cache_files:
+        file.unlink()
+
+def test_cache_invalidation(test_cache):
+    """Test cache invalidation functionality."""
+    # Set multiple cache entries
+    test_cache.set("key1", "value1")
+    test_cache.set("key2", "value2")
+    
+    # Verify entries exist
+    assert test_cache.get("key1") == "value1"
+    assert test_cache.get("key2") == "value2"
+    
+    # Test delete single entry
+    assert test_cache.delete("key1")
+    assert test_cache.get("key1") is None
+    assert test_cache.get("key2") == "value2"
+    
+    # Test clear all entries
+    assert test_cache.clear()
+    assert test_cache.get("key2") is None
+    assert not list(test_cache._cache_dir.glob("*.cache"))
 
 def test_cache_response_decorator():
     """Test the cache_response decorator."""

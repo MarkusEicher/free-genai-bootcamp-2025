@@ -51,7 +51,11 @@ export function DashboardStats() {
   }
 
   if (!data) {
-    return null;
+    return (
+      <Card className="p-6">
+        <div className={colors.text.secondary}>No data available</div>
+      </Card>
+    );
   }
 
   return (

@@ -1,50 +1,29 @@
 import { createContext, useContext, ReactNode } from 'react'
-import { useStats, useUpdateStats } from '../hooks/useApi'
-
-interface Stats {
-  wordsLearned: number
-  currentStreak: number
-  successRate: number
-  totalMinutes: number
-  recentActivity: Array<{
-    type: string
-    date: string
-    details: string
-  }>
-}
+import { useDashboardStats } from '../hooks/useApi'
 
 interface StatsContextType {
-  stats: Stats | null
+  stats: {
+    success_rate: number
+    study_sessions_count: number
+    active_activities_count: number
+    active_groups_count: number
+    study_streak: {
+      current_streak: number
+      longest_streak: number
+    }
+  } | null
   isLoading: boolean
-  updateStats: (practiceResults: { correct: number; total: number; type: string }) => void
+  isError: boolean
+  error: Error | null
 }
 
-const StatsContext = createContext<StatsContextType | null>(null)
+const StatsContext = createContext<StatsContextType | undefined>(undefined)
 
 export function StatsProvider({ children }: { children: ReactNode }) {
-  const { data: stats, isLoading } = useStats()
-  const { mutateAsync: updateStatsMutation } = useUpdateStats()
-
-  const updateStats = async (practiceResults: { correct: number; total: number; type: string }) => {
-    const newStats = {
-      ...stats,
-      wordsLearned: (stats?.wordsLearned || 0) + practiceResults.correct,
-      successRate: calculateNewSuccessRate(stats?.successRate || 0, practiceResults),
-      recentActivity: [
-        {
-          type: practiceResults.type,
-          date: new Date().toISOString(),
-          details: `Completed with ${practiceResults.correct}/${practiceResults.total} correct`
-        },
-        ...(stats?.recentActivity || []).slice(0, 9)
-      ]
-    }
-    
-    await updateStatsMutation(newStats)
-  }
+  const { data: stats, isLoading, isError, error } = useDashboardStats()
 
   return (
-    <StatsContext.Provider value={{ stats, isLoading, updateStats }}>
+    <StatsContext.Provider value={{ stats, isLoading, isError, error }}>
       {children}
     </StatsContext.Provider>
   )
@@ -52,15 +31,8 @@ export function StatsProvider({ children }: { children: ReactNode }) {
 
 export function useStatsContext() {
   const context = useContext(StatsContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useStatsContext must be used within a StatsProvider')
   }
   return context
-}
-
-function calculateNewSuccessRate(currentRate: number, results: { correct: number; total: number }) {
-  const currentWeight = 0.7 // Weight for historical data
-  const newWeight = 0.3 // Weight for new results
-  const newRate = (results.correct / results.total) * 100
-  return (currentRate * currentWeight) + (newRate * newWeight)
 } 

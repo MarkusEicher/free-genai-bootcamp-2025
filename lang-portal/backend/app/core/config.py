@@ -16,14 +16,17 @@ class Settings(BaseModel):
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
     
-    # Redis configuration
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
-    REDIS_DB: int = 0
-    REDIS_TEST_DB: int = 1  # Separate DB for testing
+    # Cache configuration
+    CACHE_DIR: str = os.path.join(BACKEND_DIR, "data", "cache")
+    CACHE_DEFAULT_EXPIRE: int = 300  # 5 minutes
+    
+    # Privacy settings
+    COLLECT_METRICS: bool = False
+    ENABLE_LOGGING: bool = False
+    LOG_LEVEL: str = "ERROR"  # Only log errors by default
     
     # Test configuration
-    TEST_DB_ECHO: bool = True
-    KEEP_TEST_DB: bool = True  # Keep test DB for debugging
+    TEST_DB_ECHO: bool = False  # Disable SQL logging in tests
+    KEEP_TEST_DB: bool = False  # Don't keep test DB by default
 
 settings = Settings()

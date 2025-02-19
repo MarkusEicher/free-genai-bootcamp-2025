@@ -32,22 +32,59 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
-filterwarnings = [
-    "ignore::pydantic.PydanticDeprecatedSince20",
-    "ignore::DeprecationWarning:httpx.*"
-]
-cache_dir = ".pytest_cache"
+# Test discovery
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+# Test categories/markers
+markers = [
+    "privacy: Tests for privacy-focused features",
+    "security: Tests for security features",
+    "integration: Integration tests",
+    "cache: Tests for caching functionality",
+    "api: Tests for API endpoints"
+]
+
+# Test configuration
 addopts = """
+    --verbose
+    --capture=no
     --cov=app
     --cov-report=term-missing
     --cov-report=html
-    --verbose
-    --capture=no
+    --no-cov-on-fail
 """
+
+# Environment variables for testing
+env = [
+    "TESTING=1",
+    "CACHE_DIR=./data/test_cache",
+    "LOG_LEVEL=ERROR",
+    "COLLECT_METRICS=0",
+    "ENABLE_LOGGING=0"
+]
+
+# Warning filters
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+    "ignore::RuntimeWarning",
+    "ignore::pydantic.PydanticDeprecatedSince20",
+    "ignore::DeprecationWarning:httpx.*"
+]
+
+# Cache directory
+cache_dir = ".pytest_cache"
+
+# Logging configuration
+log_cli = false
+log_cli_level = "ERROR"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+# Directories to ignore
 norecursedirs = [
     "*.egg",
     ".eggs",
@@ -58,6 +95,9 @@ norecursedirs = [
     ".env",
     ".venv",
     "venv",
-    "__pycache__"
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    "htmlcov"
 ]
 

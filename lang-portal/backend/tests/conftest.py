@@ -4,6 +4,8 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, UTC, timedelta
+from pathlib import Path
+import shutil
 
 from app.core.config import settings
 from app.db.base_class import Base
@@ -15,7 +17,7 @@ from app.models.vocabulary import Vocabulary
 from app.models.vocabulary_group import VocabularyGroup
 from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
 from app.models.progress import VocabularyProgress
-from app.core.cache import test_redis_client
+from app.core.cache import LocalCache
 
 # Test database setup
 TEST_DATABASE_URL = settings.TEST_DATABASE_URL
@@ -27,6 +29,9 @@ engine = create_engine(
         "timeout": 30
     }
 )
+
+# Test cache setup
+TEST_CACHE_DIR = Path(settings.BACKEND_DIR) / "data" / "test_cache"
 
 # Enable foreign key support for SQLite
 @event.listens_for(engine, "connect")
@@ -82,6 +87,22 @@ def test_engine():
             except:
                 pass  # Ignore errors when dropping tables
         conn.commit()
+
+@pytest.fixture(scope="function")
+def test_cache():
+    """Create a test cache instance."""
+    # Ensure test cache directory exists
+    TEST_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Create cache instance with test directory
+    cache = LocalCache()
+    cache._cache_dir = TEST_CACHE_DIR
+    
+    yield cache
+    
+    # Clean up after test
+    if TEST_CACHE_DIR.exists():
+        shutil.rmtree(TEST_CACHE_DIR)
 
 @pytest.fixture(scope="function")
 def db_session(test_engine):
@@ -220,8 +241,11 @@ def test_vocabulary_with_attempts(db_session: Session, test_vocabulary, test_act
     return test_vocabulary
 
 @pytest.fixture(autouse=True)
-def clear_cache():
-    """Clear Redis cache before each test."""
-    test_redis_client.flushdb()
+def clear_cache(test_cache):
+    """Clear cache before each test."""
+    if TEST_CACHE_DIR.exists():
+        shutil.rmtree(TEST_CACHE_DIR)
+    TEST_CACHE_DIR.mkdir(parents=True)
     yield
-    test_redis_client.flushdb()
+    if TEST_CACHE_DIR.exists():
+        shutil.rmtree(TEST_CACHE_DIR)

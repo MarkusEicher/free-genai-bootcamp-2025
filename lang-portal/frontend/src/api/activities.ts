@@ -1,39 +1,65 @@
-import apiClient from './client'
-
-export interface Activity {
-  id: number
-  title: string
-  description: string
-  duration: string
-  difficulty: 'Easy' | 'Medium' | 'Hard'
-  type: string
-}
-
-export interface ActivityResult {
-  sessionId: number
-  activityId: number
-  score: number
-  completedAt: string
-}
+import { fetchApi } from './config';
+import type { Activity, ActivityStats, ActivityProgress } from '../types/activities';
 
 export const activitiesApi = {
-  getAll: async (): Promise<Activity[]> => {
-    const response = await apiClient.get<Activity[]>('/activities')
-    return response.data
-  },
-  
-  getById: async (id: number): Promise<Activity> => {
-    const response = await apiClient.get<Activity>(`/activities/${id}`)
-    return response.data
-  },
-  
-  start: async (id: number): Promise<{ url: string }> => {
-    const response = await apiClient.post<{ url: string }>(`/activities/${id}/launch`)
-    return response.data
-  },
-    
-  submitResult: async (result: Omit<ActivityResult, 'completedAt'>): Promise<ActivityResult> => {
-    const response = await apiClient.post<ActivityResult>('/activity-results', result)
-    return response.data
-  }
-} 
+  // Get all activities
+  getActivities: () => 
+    fetchApi<Activity[]>('activities'),
+
+  // Get a single activity
+  getActivity: (id: number) =>
+    fetchApi<Activity>(`activities/${id}`),
+
+  // Create a new activity
+  createActivity: (activityData: Omit<Activity, 'id'>) =>
+    fetchApi<Activity>('activities', {
+      method: 'POST',
+      body: JSON.stringify(activityData),
+    }),
+
+  // Update an activity
+  updateActivity: (activity: Activity) =>
+    fetchApi<Activity>(`activities/${activity.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(activity),
+    }),
+
+  // Delete an activity
+  deleteActivity: (id: number) =>
+    fetchApi<void>(`activities/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Start an activity
+  startActivity: (activityId: number) =>
+    fetchApi<Activity>(`activities/${activityId}/start`, {
+      method: 'POST',
+    }),
+
+  // Get activity progress
+  getActivityProgress: (activityId: number) =>
+    fetchApi<ActivityProgress>(`activities/${activityId}/progress`),
+
+  // Submit activity answer
+  submitAnswer: (activityId: number, data: { step: number; answer: string }) =>
+    fetchApi<void>(`activities/${activityId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Get activity statistics
+  getActivityStats: () =>
+    fetchApi<ActivityStats>('activities/stats'),
+
+  // Get recent activity
+  getRecentActivity: () =>
+    fetchApi<Activity[]>('activities/recent'),
+
+  // Get activity history
+  getActivityHistory: () =>
+    fetchApi<Activity[]>('activities/history'),
+
+  // Get practice stats
+  getPracticeStats: () =>
+    fetchApi<any>('activities/practice/stats'),
+}; 
