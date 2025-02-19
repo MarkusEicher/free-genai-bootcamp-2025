@@ -11,6 +11,18 @@ export interface Session {
   overallScore: number
 }
 
+export interface SessionStats {
+  wordsLearned: number
+  currentStreak: number
+  successRate: number
+  totalMinutes: number
+  recentActivity: Array<{
+    type: string
+    date: string
+    details: string
+  }>
+}
+
 export const sessionsApi = {
   getAll: async (): Promise<Session[]> => {
     const response = await apiClient.get<Session[]>('/sessions')
@@ -25,5 +37,10 @@ export const sessionsApi = {
   create: async (): Promise<Session> => {
     const response = await apiClient.post<Session>('/sessions')
     return response.data
+  },
+
+  updateStats: async (stats: SessionStats): Promise<SessionStats> => {
+    const response = await apiClient.put<SessionStats>('/sessions/stats', stats)
+    return response.data
   }
-} 
+}

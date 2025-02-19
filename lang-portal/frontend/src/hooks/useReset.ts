@@ -1,16 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '../lib/api'
+import { settingsApi } from '../api/settings'
 
 export function useReset() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: api.reset,
+    mutationFn: settingsApi.reset,
     onSuccess: () => {
-      // Invalidate all queries to refetch data
+      // Invalidate all queries to refresh data after reset
       queryClient.invalidateQueries()
-      // Clear local storage
-      localStorage.clear()
     }
   })
 } 

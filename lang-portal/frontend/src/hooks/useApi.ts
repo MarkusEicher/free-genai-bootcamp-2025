@@ -5,20 +5,26 @@ import { sessionsApi } from '../api/sessions'
 import { Activity } from '../types/activities'
 import { Goal } from '../types/goals'
 import type { UserProfile, UpdateProfileData } from '../types/profile'
-import { api } from '../lib/api'
+import { dashboardApi } from '../api/dashboard'
+import { vocabularyApi } from '../api/vocabulary'
 
 export const queryClient = new QueryClient()
+
+// Constants for stale times
+const STATS_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const PROGRESS_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const SESSIONS_STALE_TIME = 60 * 1000; // 1 minute
 
 // Vocabulary hooks
 export function useVocabulary() {
   const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: ['vocabulary'],
-    queryFn: () => api.get('/vocabulary')
+    queryFn: vocabularyApi.getVocabulary
   })
 
   const mutation = useMutation({
-    mutationFn: (newVocabulary: any) => api.put('/vocabulary', newVocabulary),
+    mutationFn: vocabularyApi.updateVocabulary,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vocabulary'] })
     }
@@ -455,15 +461,57 @@ export function useGoals() {
   })
 }
 
+// Enhanced dashboard hooks with better error handling and caching
 export function useDashboardStats() {
   return useQuery({
-    queryKey: ['dashboard-stats'],
+    queryKey: ['dashboardStats'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/stats')
-      if (!response.ok) throw new Error('Failed to fetch dashboard stats')
-      return response.json()
-    }
-  })
+      try {
+        return await dashboardApi.getStats();
+      } catch (error) {
+        // Log error for monitoring
+        console.error('Failed to fetch dashboard stats:', error);
+        throw new Error('Unable to load dashboard statistics. Please try again later.');
+      }
+    },
+    staleTime: STATS_STALE_TIME,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+}
+
+export function useDashboardProgress() {
+  return useQuery({
+    queryKey: ['dashboardProgress'],
+    queryFn: async () => {
+      try {
+        return await dashboardApi.getProgress();
+      } catch (error) {
+        console.error('Failed to fetch dashboard progress:', error);
+        throw new Error('Unable to load progress data. Please try again later.');
+      }
+    },
+    staleTime: PROGRESS_STALE_TIME,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+}
+
+export function useLatestSessions(limit: number = 5) {
+  return useQuery({
+    queryKey: ['latestSessions', limit],
+    queryFn: async () => {
+      try {
+        return await dashboardApi.getLatestSessions(limit);
+      } catch (error) {
+        console.error('Failed to fetch latest sessions:', error);
+        throw new Error('Unable to load recent sessions. Please try again later.');
+      }
+    },
+    staleTime: SESSIONS_STALE_TIME,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
 }
 
 export function useRecentActivity() {
@@ -825,16 +873,34 @@ export function useCheckAnswer() {
 
 export function useUpdateStats() {
   return useMutation({
-    mutationFn: (stats: {
-      wordsLearned: number
-      currentStreak: number
-      successRate: number
-      totalMinutes: number
-      recentActivity: Array<{
-        type: string
-        date: string
-        details: string
-      }>
-    }) => api.put('/stats', stats)
+    mutationFn: sessionsApi.updateStats
   })
+}
+
+// Helper hook to fetch all dashboard data at once
+export function useDashboardData(sessionsLimit: number = 5) {
+  const stats = useDashboardStats();
+  const progress = useDashboardProgress();
+  const latestSessions = useLatestSessions(sessionsLimit);
+
+  const isLoading = stats.isLoading || progress.isLoading || latestSessions.isLoading;
+  const isError = stats.isError || progress.isError || latestSessions.isError;
+  const error = stats.error || progress.error || latestSessions.error;
+
+  return {
+    stats: stats.data,
+    progress: progress.data,
+    latestSessions: latestSessions.data,
+    isLoading,
+    isError,
+    error,
+    // Add refetch methods for manual data refresh
+    refetch: async () => {
+      await Promise.all([
+        stats.refetch(),
+        progress.refetch(),
+        latestSessions.refetch(),
+      ]);
+    },
+  };
 }

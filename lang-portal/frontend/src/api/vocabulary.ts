@@ -1,25 +1,14 @@
 import apiClient from './client'
-
-export interface Vocabulary {
-  id: number
-  word: string
-  translation: string
-  group?: string
-}
+import type { VocabularyItem } from '../types/vocabulary'
 
 export const vocabularyApi = {
-  getAll: async (): Promise<Vocabulary[]> => {
-    const response = await apiClient.get<Vocabulary[]>('/vocabulary')
+  getVocabulary: async (): Promise<VocabularyItem[]> => {
+    const response = await apiClient.get<VocabularyItem[]>('/vocabulary')
     return response.data
   },
-  
-  getById: async (id: number): Promise<Vocabulary> => {
-    const response = await apiClient.get<Vocabulary>(`/vocabulary/${id}`)
-    return response.data
-  },
-  
-  getByGroup: async (groupId: number): Promise<Vocabulary[]> => {
-    const response = await apiClient.get<Vocabulary[]>(`/vocabulary/group/${groupId}`)
+
+  updateVocabulary: async (vocabulary: VocabularyItem): Promise<VocabularyItem> => {
+    const response = await apiClient.put<VocabularyItem>(`/vocabulary/${vocabulary.id}`, vocabulary)
     return response.data
   }
-} 
+}

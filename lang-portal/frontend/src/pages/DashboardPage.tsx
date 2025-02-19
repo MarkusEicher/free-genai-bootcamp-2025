@@ -1,69 +1,58 @@
-import { useStats } from '../hooks/useApi'
-import LoadingState from '../components/LoadingState'
-import Card from '../components/Card'
-import ProgressChart from '../components/charts/ProgressChart'
-import StreakCalendar from '../components/charts/StreakCalendar'
-import StatsCard from '../components/StatsCard'
-
-interface ProgressHistory {
-  date: string
-  wordsLearned: number
-  successRate: number
-}
+import { DashboardStats } from '../components/dashboard/DashboardStats';
+import { DashboardProgress } from '../components/dashboard/DashboardProgress';
+import { LatestSessions } from '../components/dashboard/LatestSessions';
+import { useDashboardData } from '../hooks/useApi';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 export default function DashboardPage() {
-  const { data: stats, isLoading } = useStats()
-
-  if (isLoading) {
-    return <LoadingState />
-  }
-
-  const progressData = {
-    dates: stats?.progressHistory.map((h: ProgressHistory) => h.date) || [],
-    wordsLearned: stats?.progressHistory.map((h: ProgressHistory) => h.wordsLearned) || [],
-    successRate: stats?.progressHistory.map((h: ProgressHistory) => h.successRate) || []
-  }
+  const { isLoading, isError, error, refetch } = useDashboardData();
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard
-          title="Words Learned"
-          value={stats?.wordsLearned || 0}
-          description="Total words mastered"
-          trend={5}
-        />
-        <StatsCard
-          title="Current Streak"
-          value={`${stats?.currentStreak || 0} days`}
-          description="Keep practicing!"
-          trend={0}
-        />
-        <StatsCard
-          title="Success Rate"
-          value={`${Math.round(stats?.successRate || 0)}%`}
-          description="Average correct answers"
-          trend={2}
-        />
-        <StatsCard
-          title="Practice Time"
-          value={`${stats?.totalMinutes || 0} min`}
-          description="Total time learning"
-          trend={10}
-        />
+    <main 
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      aria-busy={isLoading}
+    >
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <button
+          onClick={() => refetch()}
+          disabled={isLoading}
+          aria-label={isLoading ? "Refreshing dashboard" : "Refresh dashboard"}
+          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 focus:ring-2 focus:ring-blue-500 focus:outline-none rounded"
+        >
+          <ArrowPathIcon 
+            className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}
+            aria-hidden="true"
+          />
+          <span>{isLoading ? 'Refreshing...' : 'Refresh'}</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="p-4">
-          <h2 className="text-lg font-medium mb-4">Learning Progress</h2>
-          <ProgressChart data={progressData} />
-        </Card>
-
-        <Card className="p-4">
-          <h2 className="text-lg font-medium mb-4">Practice Streak</h2>
-          <StreakCalendar data={stats?.streakData || []} />
-        </Card>
-      </div>
-    </div>
-  )
+      {isError ? (
+        <div role="alert" className="p-6 border-l-4 border-red-500 bg-red-50">
+          <div className="mb-4 text-red-700">
+            {error?.message || 'Failed to load dashboard'}
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:ring-2 focus:ring-blue-300 focus:outline-none"
+          >
+            Retry Loading Dashboard
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <section aria-label="Dashboard Statistics">
+            <DashboardStats />
+          </section>
+          <section aria-label="Learning Progress">
+            <DashboardProgress />
+          </section>
+          <section aria-label="Recent Activity">
+            <LatestSessions />
+          </section>
+        </div>
+      )}
+    </main>
+  );
 } 
