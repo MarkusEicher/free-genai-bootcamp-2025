@@ -13,61 +13,105 @@ from app.models.language_pair import LanguagePair
 def practice_setup(db_session: Session):
     """Create test data for practice tests."""
     # Create languages and pair
-    source = Language(code="en", name="English")
-    target = Language(code="de", name="German")
-    db_session.add_all([source, target])
+    source = db_session.query(Language).filter_by(code="en").first()
+    if not source:
+        source = Language(code="en", name="English")
+        db_session.add(source)
+    
+    target = db_session.query(Language).filter_by(code="de").first()
+    if not target:
+        target = Language(code="de", name="German")
+        db_session.add(target)
+    
     db_session.commit()
 
-    pair = LanguagePair(
+    # Check if language pair exists
+    pair = db_session.query(LanguagePair).filter_by(
         source_language_id=source.id,
         target_language_id=target.id
-    )
-    db_session.add(pair)
-    db_session.commit()
+    ).first()
+    
+    if not pair:
+        # Create language pair only if it doesn't exist
+        pair = LanguagePair(
+            source_language_id=source.id,
+            target_language_id=target.id
+        )
+        db_session.add(pair)
+        db_session.commit()
 
-    # Create vocabulary groups
-    groups = [
-        VocabularyGroup(
+    # Create or get vocabulary groups
+    group1 = db_session.query(VocabularyGroup).filter_by(
+        name="Basic Verbs",
+        language_pair_id=pair.id
+    ).first()
+    
+    if not group1:
+        group1 = VocabularyGroup(
             name="Basic Verbs",
             description="Common verbs for beginners",
             language_pair_id=pair.id
-        ),
-        VocabularyGroup(
+        )
+        db_session.add(group1)
+    
+    group2 = db_session.query(VocabularyGroup).filter_by(
+        name="Advanced Verbs",
+        language_pair_id=pair.id
+    ).first()
+    
+    if not group2:
+        group2 = VocabularyGroup(
             name="Advanced Verbs",
             description="Advanced verb forms",
             language_pair_id=pair.id
         )
-    ]
-    db_session.add_all(groups)
+        db_session.add(group2)
+    
     db_session.commit()
 
-    # Create vocabulary items
+    # Create or get vocabulary items and associate with groups
     vocab_data = [
-        ("run", "laufen"),
-        ("walk", "gehen"),
-        ("jump", "springen"),
-        ("swim", "schwimmen")
+        ("run", "laufen", group1),
+        ("walk", "gehen", group1),
+        ("jump", "springen", group2),
+        ("swim", "schwimmen", group2)
     ]
     vocabularies = []
-    for word, translation in vocab_data:
-        vocab = Vocabulary(
-            word=word,
-            translation=translation,
-            language_pair_id=pair.id
-        )
-        vocabularies.append(vocab)
-        # Add first two words to first group, last two to second group
-        if word in ["run", "walk"]:
-            groups[0].vocabularies.append(vocab)
-        else:
-            groups[1].vocabularies.append(vocab)
     
-    db_session.add_all(vocabularies)
+    for word, translation, group in vocab_data:
+        vocab = db_session.query(Vocabulary).filter_by(
+            word=word,
+            language_pair_id=pair.id
+        ).first()
+        
+        if not vocab:
+            vocab = Vocabulary(
+                word=word,
+                translation=translation,
+                language_pair_id=pair.id
+            )
+            db_session.add(vocab)
+            db_session.commit()
+        
+        vocabularies.append(vocab)
+        
+        # Add to group if not already there
+        if vocab not in group.vocabularies:
+            group.vocabularies.append(vocab)
+    
     db_session.commit()
+
+    # Verify associations
+    db_session.refresh(group1)
+    db_session.refresh(group2)
+    
+    # Log group contents for debugging
+    print(f"Group 1 ({group1.name}) vocabularies: {[v.word for v in group1.vocabularies]}")
+    print(f"Group 2 ({group2.name}) vocabularies: {[v.word for v in group2.vocabularies]}")
 
     return {
         "language_pair": pair,
-        "groups": groups,
+        "groups": [group1, group2],
         "vocabularies": vocabularies
     }
 
@@ -188,7 +232,9 @@ def test_invalid_vocabulary_attempt(client: TestClient, db_session: Session, pra
     }
     response = client.post(f"/api/v1/sessions/{session_id}/attempts", json=attempt_data)
     assert response.status_code == 400
-    assert "vocabulary does not belong" in response.json()["message"].lower()
+    error_response = response.json()
+    assert error_response["detail"]["code"] == "INVALID_VOCABULARY"
+    assert "vocabulary does not belong" in error_response["detail"]["message"].lower()
 
 def test_activity_progress_with_groups(client: TestClient, db_session: Session, practice_setup):
     """Test progress tracking for vocabulary from different groups."""

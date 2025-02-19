@@ -93,6 +93,6 @@ class ActivityProgressUpdate(BaseModel):
 class ActivityProgressResponse(ActivityProgressBase):
     model_config = ConfigDict(from_attributes=True)
     
-    id: int
+    id: Optional[int] = None
     activity_id: int
     vocabulary_id: int

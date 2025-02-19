@@ -18,7 +18,7 @@ from app.models.vocabulary_group import VocabularyGroup
 from app.models.vocabulary import Vocabulary
 from app.models.activity import Activity, Session, SessionAttempt
 from app.models.progress import VocabularyProgress
-from app.models.associations import activity_vocabulary, vocabulary_group_association
+from app.models.associations import vocabulary_group_association
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

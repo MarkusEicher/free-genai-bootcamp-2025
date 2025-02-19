@@ -95,9 +95,8 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         db.refresh(db_obj)
         return db_obj
 
-    def get_practice_vocabulary(self, db: Session, activity_id: int) -> List[dict]:
+    def get_practice_vocabulary(self, db: Session, activity: Activity) -> List[dict]:
         """Get practice vocabulary for an activity."""
-        activity = self.get(db, id=activity_id)
         if not activity:
             raise HTTPException(status_code=404, detail="Activity not found")
         
@@ -123,12 +122,15 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         # Get progress for each vocabulary
         result = []
         for vocab_id in vocabulary_ids:
-            # Get attempt statistics
+            # Get attempt statistics for this activity only
             attempt_stats = db.query(
                 func.count(SessionAttempt.id).label('attempt_count'),
                 func.sum(case((SessionAttempt.is_correct, 1), else_=0)).label('correct_count')
+            ).join(
+                ActivitySession, SessionAttempt.session_id == ActivitySession.id
             ).filter(
-                SessionAttempt.vocabulary_id == vocab_id
+                SessionAttempt.vocabulary_id == vocab_id,
+                ActivitySession.activity_id == activity_id
             ).first()
 
             # Get progress record
@@ -152,6 +154,14 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
             ))
 
         return result
+
+    def has_vocabulary(self, activity: Activity, vocabulary_id: int) -> bool:
+        """Check if a vocabulary belongs to any of the activity's groups."""
+        for group in activity.vocabulary_groups:
+            for vocab in group.vocabularies:
+                if vocab.id == vocabulary_id:
+                    return True
+        return False
 
 # Keep SessionService unchanged as it works with vocabulary IDs directly
 class SessionService(BaseService[ActivitySession, SessionCreate, SessionCreate]):

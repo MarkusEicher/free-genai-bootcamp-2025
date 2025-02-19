@@ -15,7 +15,9 @@ from app.schemas.activity import (
     SessionAttemptResponse,
     ActivityProgressResponse
 )
+from app.schemas.vocabulary import VocabularyResponse
 from app.core.cache import cache_response
+from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
 
 router = APIRouter()
 
@@ -81,83 +83,35 @@ def create_activity(
     activity: ActivityCreate,
     db: Session = Depends(get_db)
 ):
+    # Validate vocabulary groups
+    if not activity.vocabulary_group_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "MISSING_VOCABULARY_GROUPS",
+                "message": "At least one vocabulary group must be specified"
+            }
+        )
     return activity_service.create_with_validation(db, obj_in=activity)
 
 @router.get(
     "/activities",
     response_model=List[ActivityResponse],
     summary="List Activities",
-    description="List activities with optional type filtering and pagination.",
-    responses={
-        200: {
-            "description": "List of activities",
-            "content": {
-                "application/json": {
-                    "example": [
-                        {
-                            "id": 1,
-                            "type": "flashcard",
-                            "name": "Basic Verbs",
-                            "description": "Practice common verbs",
-                            "practice_direction": "forward",
-                            "created_at": "2024-03-21T10:00:00Z",
-                            "vocabulary_groups": [
-                                {"id": 1, "name": "Common Verbs"}
-                            ]
-                        }
-                    ]
-                }
-            }
-        }
-    }
+    description="Get a list of all activities."
 )
-def list_activities(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
-    type: Optional[str] = None,
+@cache_response(prefix="activity:list", expire=60)
+async def list_activities(
     db: Session = Depends(get_db)
 ):
-    if type:
-        return activity_service.get_by_type(db, type=type, skip=skip, limit=limit)
-    return activity_service.get_multi(db, skip=skip, limit=limit)
-
-@router.get("/activities/{activity_id}", response_model=ActivityResponse)
-def get_activity(activity_id: int, db: Session = Depends(get_db)):
-    """
-    Get activity details including associated vocabulary groups.
-    """
-    activity = activity_service.get(db, id=activity_id)
-    if not activity:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    return activity
+    return activity_service.get_multi(db)
 
 @router.get(
-    "/activities/{activity_id}/practice",
-    summary="Get Practice Vocabulary",
-    description="""
-    Get practice vocabulary for an activity.
-    
-    Returns vocabulary items in the correct direction based on activity's practice_direction.
-    Items are retrieved from all associated vocabulary groups.
-    """,
+    "/activities/{activity_id}",
+    response_model=ActivityResponse,
+    summary="Get Activity",
+    description="Get activity details by ID.",
     responses={
-        200: {
-            "description": "Practice vocabulary items",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "items": [
-                            {
-                                "word": "run",
-                                "translation": "laufen",
-                                "vocabulary_id": 1,
-                                "language_pair_id": 1
-                            }
-                        ]
-                    }
-                }
-            }
-        },
         404: {
             "description": "Activity not found",
             "content": {
@@ -170,11 +124,48 @@ def get_activity(activity_id: int, db: Session = Depends(get_db)):
         }
     }
 )
-@cache_response(prefix="activity:practice", expire=300)
-def get_practice_vocabulary(activity_id: int, db: Session = Depends(get_db)):
-    return {
-        "items": activity_service.get_practice_vocabulary(db, activity_id=activity_id)
+@cache_response(prefix="activity:detail", expire=60)
+async def get_activity(
+    activity_id: int,
+    db: Session = Depends(get_db)
+):
+    activity = activity_service.get(db, id=activity_id)
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return activity
+
+@router.get(
+    "/activities/{activity_id}/practice",
+    response_model=dict,
+    summary="Get Practice Vocabulary",
+    description="""
+    Get vocabulary items for practice from the activity's vocabulary groups.
+    
+    The items are returned in random order.
+    """,
+    responses={
+        404: {
+            "description": "Activity not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Activity not found"
+                    }
+                }
+            }
+        }
     }
+)
+@cache_response(prefix="activity:practice", expire=60)
+async def get_practice_vocabulary(
+    activity_id: int,
+    db: Session = Depends(get_db)
+):
+    activity = activity_service.get(db, id=activity_id)
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    items = activity.get_practice_vocabulary()  # Get items directly from activity model
+    return {"items": items}
 
 @router.put(
     "/activities/{activity_id}",
@@ -250,24 +241,6 @@ def delete_activity(activity_id: int, db: Session = Depends(get_db)):
     in the specified practice direction.
     """,
     responses={
-        200: {
-            "description": "Session created successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 1,
-                        "activity_id": 1,
-                        "start_time": "2024-03-21T10:00:00Z",
-                        "end_time": None,
-                        "created_at": "2024-03-21T10:00:00Z",
-                        "attempts": [],
-                        "correct_count": 0,
-                        "incorrect_count": 0,
-                        "success_rate": 0.0
-                    }
-                }
-            }
-        },
         404: {
             "description": "Activity not found",
             "content": {
@@ -280,22 +253,69 @@ def delete_activity(activity_id: int, db: Session = Depends(get_db)):
         }
     }
 )
-def create_session(
+async def create_session(
     activity_id: int,
-    session: SessionCreate,
+    session_create: SessionCreate,
     db: Session = Depends(get_db)
 ):
-    return session_service.create_session(db, activity_id=activity_id, session_data=session)
+    activity = activity_service.get(db, id=activity_id)
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
 
-@router.get("/activities/{activity_id}/sessions", response_model=List[SessionResponse])
-def list_activity_sessions(
+    # Create session
+    session = ActivitySession(
+        activity_id=activity_id,
+        start_time=session_create.start_time,
+        end_time=session_create.end_time
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    # Return with empty attempts list and initial stats
+    return SessionResponse(
+        id=session.id,
+        activity_id=activity_id,
+        start_time=session.start_time,
+        end_time=session.end_time,
+        created_at=session.created_at,
+        attempts=[],
+        correct_count=0,
+        incorrect_count=0,
+        success_rate=0.0
+    )
+
+@router.get(
+    "/activities/{activity_id}/sessions",
+    response_model=List[SessionResponse],
+    summary="List Activity Sessions",
+    description="""
+    Get a list of practice sessions for an activity.
+    
+    Sessions are ordered by creation date, with the most recent first.
+    """,
+    responses={
+        404: {
+            "description": "Activity not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Activity not found"
+                    }
+                }
+            }
+        }
+    }
+)
+@cache_response(prefix="activity:sessions", expire=60)
+async def get_sessions(
     activity_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    """List all practice sessions for an activity."""
-    return session_service.get_activity_sessions(db, activity_id=activity_id, skip=skip, limit=limit)
+    activity = activity_service.get(db, id=activity_id)
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return session_service.get_by_activity(db, activity_id=activity_id)
 
 @router.post(
     "/sessions/{session_id}/attempts",
@@ -345,18 +365,37 @@ def list_activity_sessions(
         }
     }
 )
-def record_attempt(
+async def record_attempt(
     session_id: int,
     attempt: SessionAttemptCreate,
     db: Session = Depends(get_db)
 ):
-    return session_service.record_attempt(
-        db,
+    session = session_service.get(db, id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Verify vocabulary belongs to activity's groups
+    activity = activity_service.get(db, id=session.activity_id)
+    if not activity_service.has_vocabulary(activity, attempt.vocabulary_id):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_VOCABULARY",
+                "message": "Vocabulary does not belong to activity's groups"
+            }
+        )
+
+    # Create attempt
+    db_attempt = SessionAttempt(
         session_id=session_id,
         vocabulary_id=attempt.vocabulary_id,
         is_correct=attempt.is_correct,
         response_time_ms=attempt.response_time_ms
     )
+    db.add(db_attempt)
+    db.commit()
+    db.refresh(db_attempt)
+    return db_attempt
 
 @router.get(
     "/activities/{activity_id}/progress",
@@ -402,7 +441,7 @@ def record_attempt(
     }
 )
 @cache_response(prefix="activity:progress", expire=60)
-def get_activity_progress(
+async def get_activity_progress(
     activity_id: int,
     db: Session = Depends(get_db)
 ):

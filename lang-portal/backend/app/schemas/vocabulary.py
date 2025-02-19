@@ -59,3 +59,9 @@ class DuplicateVocabularyError(VocabularyError):
     code: str = "duplicate_vocabulary"
     word: str
     language_pair_id: int
+
+class VocabularyResponse(BaseModel):
+    word: str
+    translation: str
+    vocabulary_id: int
+    language_pair_id: int

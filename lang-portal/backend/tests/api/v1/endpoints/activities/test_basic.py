@@ -49,7 +49,7 @@ def test_create_activity_without_group(client: TestClient):
         }
     )
     assert response.status_code == 400
-    assert "at least one vocabulary group" in response.json()["detail"]["message"]
+    assert response.json()["detail"]["message"] == "At least one vocabulary group must be specified"
 
 def test_get_activity(client: TestClient, test_base_data, db_session: Session):
     """Test getting activity details."""

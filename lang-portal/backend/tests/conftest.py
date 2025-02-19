@@ -1,13 +1,13 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, UTC, timedelta
 
 from app.core.config import settings
 from app.db.base_class import Base
-from app.db.database import get_db
+from app.db.database import get_db, engine
 from app.main import app
 from app.models.language import Language
 from app.models.language_pair import LanguagePair
@@ -22,7 +22,10 @@ TEST_DATABASE_URL = settings.TEST_DATABASE_URL
 engine = create_engine(
     TEST_DATABASE_URL,
     echo=settings.TEST_DB_ECHO,
-    connect_args={"check_same_thread": False}
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30
+    }
 )
 
 # Enable foreign key support for SQLite
@@ -30,37 +33,66 @@ engine = create_engine(
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better concurrency
+    cursor.execute("PRAGMA synchronous=NORMAL")  # Faster writes with reasonable safety
+    cursor.execute("PRAGMA cache_size=-2000")  # 2MB cache
     cursor.close()
 
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    expire_on_commit=False  # Prevent detached instance errors
+)
 
 @pytest.fixture(scope="session", autouse=True)
 def test_engine():
     """Create test engine and run migrations"""
-    # Drop all tables for a clean start
-    Base.metadata.drop_all(bind=engine)
-    
     # Create all tables
     Base.metadata.create_all(bind=engine)
-    
+
+    # Enable foreign key support
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.execute(text("PRAGMA synchronous=NORMAL"))
+        conn.execute(text("PRAGMA cache_size=-2000"))
+        conn.commit()
+
     yield engine
-    
-    # Cleanup after all tests
-    if not settings.KEEP_TEST_DB:
-        Base.metadata.drop_all(bind=engine)
+
+    # Clean up after tests
+    with engine.connect() as conn:
+        # Drop tables in reverse dependency order
+        tables = [
+            "vocabulary_progress",
+            "session_attempts",
+            "vocabulary_group_association",
+            "activity_vocabulary_group",
+            "sessions",
+            "activities",
+            "vocabulary_groups",
+            "vocabularies",
+            "language_pairs",
+            "languages"
+        ]
+        for table in tables:
+            try:
+                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+            except:
+                pass  # Ignore errors when dropping tables
+        conn.commit()
 
 @pytest.fixture(scope="function")
-def db_session(test_engine) -> Session:
-    """Create a fresh database session for each test"""
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+def db_session(test_engine):
+    """Create a new database session for a test."""
+    SessionLocal = sessionmaker(bind=test_engine)
+    session = SessionLocal()
 
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+    try:
+        yield session
+    finally:
+        session.close()
 
 # Alias for db_session for backward compatibility
 @pytest.fixture(scope="function")

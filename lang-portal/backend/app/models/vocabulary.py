@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueCons
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from app.db.base_class import Base
-from app.models.associations import vocabulary_group_association, activity_vocabulary
+from app.models.associations import vocabulary_group_association
 
 class Vocabulary(Base):
     __tablename__ = "vocabularies"
@@ -23,11 +23,6 @@ class Vocabulary(Base):
     groups = relationship(
         "VocabularyGroup",
         secondary=vocabulary_group_association,
-        back_populates="vocabularies"
-    )
-    activities = relationship(
-        "Activity",
-        secondary=activity_vocabulary,
         back_populates="vocabularies"
     )
     session_attempts = relationship("SessionAttempt", back_populates="vocabulary")
