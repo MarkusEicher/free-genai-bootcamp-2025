@@ -1,75 +1,115 @@
-import { fetchApi } from './config';
+import { fetchApi, ApiError } from './config';
+import { API_ENDPOINTS } from './constants';
 import type { VocabularyItem, VocabularyGroup } from '../types/vocabulary';
 
+const defaultVocabularyStats = {
+  total_items: 0,
+  mastered_items: 0,
+  learning_items: 0,
+  groups_count: 0
+};
+
 export const vocabularyApi = {
-  // Get all vocabulary items
-  getVocabulary: () => 
-    fetchApi<VocabularyItem[]>('vocabulary'),
+  getVocabulary: async (): Promise<VocabularyItem[]> => {
+    try {
+      return await fetchApi<VocabularyItem[]>(API_ENDPOINTS.VOCABULARY.LIST);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  },
 
-  // Get a single vocabulary item
-  getVocabularyItem: (id: number) =>
-    fetchApi<VocabularyItem>(`vocabulary/${id}`),
+  getVocabularyItem: async (id: number): Promise<VocabularyItem> => {
+    return await fetchApi<VocabularyItem>(API_ENDPOINTS.VOCABULARY.DETAIL(id));
+  },
 
-  // Create a new vocabulary item
-  createVocabulary: (newWord: Omit<VocabularyItem, 'id'>) =>
-    fetchApi<VocabularyItem>('vocabulary', {
+  createVocabulary: async (data: Omit<VocabularyItem, 'id'>): Promise<VocabularyItem> => {
+    return await fetchApi<VocabularyItem>(API_ENDPOINTS.VOCABULARY.LIST, {
       method: 'POST',
-      body: JSON.stringify(newWord),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
-  // Update a vocabulary item
-  updateVocabulary: (word: VocabularyItem) =>
-    fetchApi<VocabularyItem>(`vocabulary/${word.id}`, {
+  updateVocabulary: async (id: number, data: Partial<VocabularyItem>): Promise<VocabularyItem> => {
+    return await fetchApi<VocabularyItem>(API_ENDPOINTS.VOCABULARY.DETAIL(id), {
       method: 'PUT',
-      body: JSON.stringify(word),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
-  // Delete a vocabulary item
-  deleteVocabulary: (id: number) =>
-    fetchApi<void>(`vocabulary/${id}`, {
-      method: 'DELETE',
-    }),
+  deleteVocabulary: async (id: number): Promise<void> => {
+    await fetchApi(API_ENDPOINTS.VOCABULARY.DETAIL(id), {
+      method: 'DELETE'
+    });
+  },
 
-  // Get vocabulary groups
-  getVocabularyGroups: () =>
-    fetchApi<VocabularyGroup[]>('vocabulary-groups'),
+  getVocabularyStats: async () => {
+    try {
+      return await fetchApi<typeof defaultVocabularyStats>(`${API_ENDPOINTS.VOCABULARY.LIST}/stats`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return defaultVocabularyStats;
+      }
+      throw error;
+    }
+  },
 
-  // Get a single vocabulary group
-  getVocabularyGroup: (id: number) =>
-    fetchApi<VocabularyGroup>(`vocabulary-groups/${id}`),
+  // Group operations
+  getGroups: async (): Promise<VocabularyGroup[]> => {
+    try {
+      return await fetchApi<VocabularyGroup[]>(`${API_ENDPOINTS.VOCABULARY.LIST}/groups`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  },
 
-  // Create a new vocabulary group
-  createVocabularyGroup: (group: Omit<VocabularyGroup, 'id'>) =>
-    fetchApi<VocabularyGroup>('vocabulary-groups', {
+  getGroup: async (id: number): Promise<VocabularyGroup> => {
+    return await fetchApi<VocabularyGroup>(`${API_ENDPOINTS.VOCABULARY.LIST}/groups/${id}`);
+  },
+
+  createGroup: async (data: Omit<VocabularyGroup, 'id'>): Promise<VocabularyGroup> => {
+    return await fetchApi<VocabularyGroup>(`${API_ENDPOINTS.VOCABULARY.LIST}/groups`, {
       method: 'POST',
-      body: JSON.stringify(group),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
-  // Update a vocabulary group
-  updateVocabularyGroup: (group: VocabularyGroup) =>
-    fetchApi<VocabularyGroup>(`vocabulary-groups/${group.id}`, {
+  updateGroup: async (id: number, data: Partial<VocabularyGroup>): Promise<VocabularyGroup> => {
+    return await fetchApi<VocabularyGroup>(`${API_ENDPOINTS.VOCABULARY.LIST}/groups/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(group),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
-  // Delete a vocabulary group
-  deleteVocabularyGroup: (id: number) =>
-    fetchApi<void>(`vocabulary-groups/${id}`, {
-      method: 'DELETE',
-    }),
+  deleteGroup: async (id: number): Promise<void> => {
+    await fetchApi(`${API_ENDPOINTS.VOCABULARY.LIST}/groups/${id}`, {
+      method: 'DELETE'
+    });
+  },
 
-  // Get vocabulary statistics
-  getVocabularyStats: () =>
-    fetchApi<any>('vocabulary/stats'),
+  // Item operations within groups
+  addItemToGroup: async (groupId: number, itemId: number): Promise<void> => {
+    await fetchApi(`${API_ENDPOINTS.VOCABULARY.LIST}/groups/${groupId}/items/${itemId}`, {
+      method: 'POST'
+    });
+  },
 
-  // Get group statistics
-  getGroupStats: (id: number) =>
-    fetchApi<any>(`vocabulary-groups/${id}/stats`),
+  removeItemFromGroup: async (groupId: number, itemId: number): Promise<void> => {
+    await fetchApi(`${API_ENDPOINTS.VOCABULARY.LIST}/groups/${groupId}/items/${itemId}`, {
+      method: 'DELETE'
+    });
+  },
 
-  // Merge vocabulary groups
-  mergeGroups: (sourceId: number, targetId: number) =>
-    fetchApi<void>('vocabulary-groups/merge', {
-      method: 'POST',
-      body: JSON.stringify({ sourceId, targetId }),
-    }),
+  // Progress tracking
+  updateProgress: async (id: number, data: { status: 'learning' | 'mastered' }): Promise<VocabularyItem> => {
+    return await fetchApi<VocabularyItem>(`${API_ENDPOINTS.VOCABULARY.DETAIL(id)}/progress`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
 };

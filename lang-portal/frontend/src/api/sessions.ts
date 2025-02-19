@@ -1,66 +1,123 @@
-import { fetchApi } from './config';
-import type { Session, SessionStats } from '../types/sessions';
+import { fetchApi, ApiError } from './config';
+import { API_ENDPOINTS } from './constants';
+import type { Session, SessionStats, SessionHistory } from '../types/sessions';
+
+const defaultStats: SessionStats = {
+  total_sessions: 0,
+  completed_sessions: 0,
+  average_score: 0,
+  total_time: 0
+};
 
 export const sessionsApi = {
   // Get all sessions
-  getSessions: () => 
-    fetchApi<Session[]>('sessions'),
+  getSessions: async (): Promise<Session[]> => {
+    try {
+      return await fetchApi<Session[]>(API_ENDPOINTS.SESSIONS.LIST);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  },
 
   // Get session statistics
-  getSessionStats: () =>
-    fetchApi<SessionStats>('sessions/stats'),
+  getSessionStats: async (): Promise<SessionStats> => {
+    try {
+      return await fetchApi<SessionStats>(`${API_ENDPOINTS.SESSIONS.LIST}/stats`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return defaultStats;
+      }
+      throw error;
+    }
+  },
 
   // Get a single session
-  getSession: (id: number) =>
-    fetchApi<Session>(`sessions/${id}`),
+  getSession: async (id: number): Promise<Session> => {
+    return await fetchApi<Session>(API_ENDPOINTS.SESSIONS.DETAIL(id));
+  },
 
   // Create a new session
-  createSession: (sessionData: Omit<Session, 'id'>) =>
-    fetchApi<Session>('sessions', {
+  createSession: async (data: Partial<Session>): Promise<Session> => {
+    return await fetchApi<Session>(API_ENDPOINTS.SESSIONS.LIST, {
       method: 'POST',
-      body: JSON.stringify(sessionData),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
   // Update a session
-  updateSession: (session: Session) =>
-    fetchApi<Session>(`sessions/${session.id}`, {
+  updateSession: async (id: number, data: Partial<Session>): Promise<Session> => {
+    return await fetchApi<Session>(API_ENDPOINTS.SESSIONS.DETAIL(id), {
       method: 'PUT',
-      body: JSON.stringify(session),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
   // Delete a session
-  deleteSession: (id: number) =>
-    fetchApi<void>(`sessions/${id}`, {
-      method: 'DELETE',
-    }),
+  deleteSession: async (id: number): Promise<void> => {
+    await fetchApi(API_ENDPOINTS.SESSIONS.DETAIL(id), {
+      method: 'DELETE'
+    });
+  },
 
   // Get latest sessions
   getLatestSessions: (limit: number = 5) =>
     fetchApi<Session[]>(`sessions/latest?limit=${limit}`),
 
   // Get previous session
-  getPreviousSession: (currentSessionId: number) =>
-    fetchApi<Session>(`sessions/${currentSessionId}/previous`),
+  getPreviousSession: async (currentSessionId: number): Promise<Session | null> => {
+    try {
+      return await fetchApi<Session>(API_ENDPOINTS.SESSIONS.PREVIOUS(currentSessionId));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
 
   // Get last session
-  getLastSession: () =>
-    fetchApi<Session>('sessions/last'),
+  getLastSession: async (): Promise<Session | null> => {
+    try {
+      return await fetchApi<Session>(API_ENDPOINTS.SESSIONS.LAST);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
 
   // Get session history
-  getSessionHistory: () =>
-    fetchApi<Session[]>('sessions/history'),
+  getSessionHistory: async (): Promise<SessionHistory[]> => {
+    try {
+      return await fetchApi<SessionHistory[]>(API_ENDPOINTS.SESSIONS.HISTORY);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  },
 
   // Start practice session
-  startPracticeSession: (data: { type: string; wordIds?: number[] }) =>
-    fetchApi<Session>('sessions/practice/start', {
+  startPracticeSession: async (data: { groupId: number; type: string }): Promise<Session> => {
+    return await fetchApi<Session>(`${API_ENDPOINTS.SESSIONS.LIST}/practice`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(data)
+    });
+  },
 
   // Submit session answer
-  submitAnswer: (sessionId: number, data: { wordId: number; correct: boolean }) =>
-    fetchApi<void>(`sessions/${sessionId}/answer`, {
+  submitAnswer: async (
+    sessionId: number,
+    data: { wordId: number; correct: boolean }
+  ): Promise<Session> => {
+    return await fetchApi<Session>(`${API_ENDPOINTS.SESSIONS.DETAIL(sessionId)}/submit`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(data)
+    });
+  }
 };

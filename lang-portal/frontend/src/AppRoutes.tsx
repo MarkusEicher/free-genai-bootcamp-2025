@@ -1,28 +1,37 @@
-import { Routes, Route } from 'react-router-dom'
-import DashboardPage from './pages/dashboard/DashboardPage'
-import SessionsPage from './pages/sessions/SessionsPage'
-import SessionDetailsPage from './pages/sessions/SessionDetailsPage'
-import ActivityDetailsPage from './pages/sessions/ActivityDetailsPage'
-import LaunchpadPage from './pages/launchpad/LaunchpadPage'
-import VocabularyPage from './pages/vocabulary/VocabularyPage'
-import VocabularyDetailsPage from './pages/vocabulary/VocabularyDetailsPage'
-import VocabularyGroupsPage from './pages/vocabulary/VocabularyGroupsPage'
-import SettingsPage from './pages/settings/SettingsPage'
+import React from 'react';
+import { Switch } from 'react-router-dom';
+import { ErrorBoundaryRoute } from './components/error/ErrorBoundaryRoute';
+import { Dashboard } from './pages/Dashboard';
+import { Vocabulary } from './pages/Vocabulary';
+import { Activities } from './pages/Activities';
+import { NotFound } from './pages/NotFound';
 
-function AppRoutes() {
+export const AppRoutes: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/" element={<DashboardPage />} />
-      <Route path="/sessions" element={<SessionsPage />} />
-      <Route path="/sessions/:sessionId" element={<SessionDetailsPage />} />
-      <Route path="/sessions/:sessionId/activities/:activityId" element={<ActivityDetailsPage />} />
-      <Route path="/launchpad" element={<LaunchpadPage />} />
-      <Route path="/vocabulary" element={<VocabularyPage />} />
-      <Route path="/vocabulary/:vocabularyId" element={<VocabularyDetailsPage />} />
-      <Route path="/vocabulary-groups" element={<VocabularyGroupsPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
-    </Routes>
-  )
-}
+    <Switch>
+      <ErrorBoundaryRoute exact path="/">
+        <Dashboard />
+      </ErrorBoundaryRoute>
 
-export default AppRoutes 
+      <ErrorBoundaryRoute exact path="/vocabulary">
+        <Vocabulary />
+      </ErrorBoundaryRoute>
+
+      <ErrorBoundaryRoute exact path="/vocabulary/:id">
+        <Vocabulary />
+      </ErrorBoundaryRoute>
+
+      <ErrorBoundaryRoute exact path="/activities">
+        <Activities />
+      </ErrorBoundaryRoute>
+
+      <ErrorBoundaryRoute exact path="/activities/:id">
+        <Activities />
+      </ErrorBoundaryRoute>
+
+      <ErrorBoundaryRoute path="*">
+        <NotFound />
+      </ErrorBoundaryRoute>
+    </Switch>
+  );
+}; 
