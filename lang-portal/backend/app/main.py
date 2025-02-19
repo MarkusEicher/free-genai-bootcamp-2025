@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from app.api.v1.endpoints import (
     languages,
@@ -15,16 +14,11 @@ from app.api.v1.endpoints import (
 app = FastAPI(
     title="Language Learning Portal",
     description="Backend API for the Language Learning Portal",
-    version="0.1.0"
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    version="0.1.0",
+    # Disable automatic API documentation for privacy
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
 )
 
 # Include routers
@@ -47,4 +41,4 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/docs")
+    return {"message": "Language Learning Portal API"}

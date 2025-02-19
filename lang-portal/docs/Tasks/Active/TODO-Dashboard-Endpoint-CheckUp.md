@@ -1,5 +1,80 @@
 # Dashboard Endpoints Documentation
 
+## IMPORTANT Constraint for the Language Learning App as a whole
+As a general rule for the frontend we want to emphasize that we need as much as possible of the content to be served from the local server. When ever possible prevent usage of CORS and remote sources. For example fonts need to be served from the server itself. It is not wanted to have them implemented as webfonts. Another point is to prevent using cookies and tracking, statistics or performance and location logging or whatever might trigger user acceptation warnings. We want to be compliant with rigorous data privacy best practices and GDPR, if possible without even have to ask the user because we do not use technology and code that would need user acceptance. This constraint is very important and I want you to report, if we would violate this before making changes. The same importance goes for accessibility. We want o achieve WCAG 2.1 AAA if possible. We only deviate from this constraint if the technical complexity or the performance level would be unfeasible for the solution.
+
+## Core Design Principles Compliance Review
+
+⚠️ **IMPORTANT**: Before proceeding with the dashboard implementation, we need to address several violations of our core design principles:
+
+### Local Server & CORS Requirements
+1. **Current Violations**:
+   - Backend CORS middleware configuration
+   - Frontend API calls not restricted to local server
+   - External dependencies in frontend (fonts, charts)
+   - CDN usage in frontend components
+
+2. **Required Changes**:
+   - [ ] Remove CORS middleware from backend
+   - [ ] Update frontend API configuration to use relative paths only
+   - [ ] Package and serve all fonts locally
+   - [ ] Replace external chart libraries with custom SVG implementations
+   - [ ] Ensure all assets are served from local server
+   - [ ] Remove any CDN dependencies
+
+### Data Privacy & GDPR Compliance
+1. **Current Violations**:
+   - Redis-based tracking and logging
+   - Unnecessary session data collection
+   - Performance monitoring overhead
+
+2. **Required Changes**:
+   - [ ] Simplify Redis usage to essential caching only
+   - [ ] Remove unnecessary user data collection
+   - [ ] Minimize session data storage
+   - [ ] Remove performance tracking that requires user consent
+   - [ ] Implement privacy-first caching strategy
+   - [ ] Document data retention policies
+
+### Accessibility Requirements (WCAG 2.1 AAA)
+1. **Current Implementation Gaps**:
+   - Dashboard visualizations not fully accessible
+   - Keyboard navigation incomplete
+   - Screen reader support limited
+   - Color contrast issues in charts
+
+2. **Required Changes**:
+   - [ ] Add proper ARIA labels to all dashboard components
+   - [ ] Implement keyboard navigation for all interactive elements
+   - [ ] Add screen reader descriptions for charts and statistics
+   - [ ] Ensure sufficient color contrast in all visualizations
+   - [ ] Add text alternatives for graphical data
+   - [ ] Implement focus management
+   - [ ] Add skip links for navigation
+
+### Implementation Priority Update
+Given these requirements, we need to modify our implementation approach:
+
+1. **Frontend Changes**:
+   - Create custom SVG components for all visualizations
+   - Implement local font serving
+   - Build accessible data visualization components
+   - Remove all external dependencies
+   - Use localStorage for necessary client-side data
+
+2. **Backend Changes**:
+   - Remove CORS configuration
+   - Simplify Redis to basic caching
+   - Implement local-only API structure
+   - Remove unnecessary tracking
+
+3. **Documentation Updates**:
+   - Add accessibility compliance guidelines
+   - Document local-only architecture
+   - Add privacy-first implementation guide
+
+⚠️ **Note**: All subsequent implementation tasks in this document must be reviewed and updated to comply with these core principles.
+
 ## Overview
 The dashboard provides three main endpoints for retrieving statistics and progress information. All endpoints are cached for performance optimization and include comprehensive error handling.
 
