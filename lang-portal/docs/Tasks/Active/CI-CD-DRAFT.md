@@ -455,3 +455,302 @@ Looking forward to your feedback and suggestions.
 
 Best regards,
 Frontend Team 
+
+## Backend CI/CD Requirements
+
+### 1. Local Development Pipeline
+```yaml
+name: Backend Development Pipeline
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+    branches:
+      - develop
+      - feature/**
+  pull_request:
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          
+      - name: Install dependencies
+        run: |
+          cd backend
+          poetry install
+          
+      - name: Run tests
+        run: |
+          cd backend
+          poetry run pytest tests/ --cov=app --cov-report=xml
+          
+      - name: Run linting
+        run: |
+          cd backend
+          poetry run black . --check
+          poetry run isort . --check
+          poetry run flake8 .
+          
+      - name: Type checking
+        run: |
+          cd backend
+          poetry run mypy app/
+
+  performance:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run performance tests
+        run: |
+          cd backend
+          poetry run pytest tests/performance/ --benchmark-only
+```
+
+### 2. Backend Deployment Requirements
+
+#### Environment Configuration
+```bash
+# Required environment variables
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+DATABASE_URL=sqlite:///./app.db
+API_HOST=0.0.0.0
+API_PORT=8000
+DEBUG=false
+```
+
+#### Database Migration Strategy
+```python
+# alembic/env.py
+def run_migrations_online():
+    """Run migrations in 'online' mode."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+```
+
+#### Health Check Implementation
+```python
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment verification."""
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "database": await check_database_connection(),
+        "cache": await check_redis_connection()
+    }
+```
+
+### 3. Performance Monitoring
+
+#### Metrics Collection
+```python
+from prometheus_client import Counter, Histogram
+
+REQUEST_COUNT = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+
+REQUEST_LATENCY = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request latency',
+    ['method', 'endpoint']
+)
+```
+
+#### Logging Configuration
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json'
+        }
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO'
+    }
+}
+```
+
+### 4. Security Measures
+
+#### Security Headers
+```python
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+```
+
+#### Rate Limiting
+```python
+from fastapi import HTTPException
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1"]
+)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host
+    if await is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests")
+    return await call_next(request)
+```
+
+### 5. Deployment Verification
+
+#### Pre-deployment Checks
+```bash
+#!/bin/bash
+# pre-deploy.sh
+
+# Check Python version
+python --version
+
+# Verify dependencies
+poetry check
+
+# Run tests
+poetry run pytest
+
+# Check migrations
+poetry run alembic check
+
+# Verify environment variables
+./scripts/check-env.sh
+
+# Check security headers
+./scripts/check-security.sh
+```
+
+#### Post-deployment Checks
+```bash
+#!/bin/bash
+# post-deploy.sh
+
+# Verify API health
+curl http://localhost:8000/health
+
+# Check database connectivity
+./scripts/check-db.sh
+
+# Verify Redis connection
+./scripts/check-redis.sh
+
+# Run smoke tests
+poetry run pytest tests/smoke/
+```
+
+### 6. Rollback Strategy
+
+#### Database Rollback
+```python
+# alembic/versions/rollback.py
+def downgrade():
+    """Rollback database changes."""
+    op.execute("""
+        -- Rollback SQL statements
+        DROP INDEX IF EXISTS idx_sessions_user_date;
+        DROP INDEX IF EXISTS idx_progress_user_activity;
+    """)
+```
+
+#### Application Rollback
+```bash
+#!/bin/bash
+# rollback.sh
+
+# Stop current version
+supervisorctl stop langportal
+
+# Restore previous version
+cp -r /opt/backup/langportal-$(date +%Y%m%d) /opt/langportal
+
+# Start previous version
+supervisorctl start langportal
+
+# Verify health
+./scripts/health-check.sh
+```
+
+### 7. Monitoring Strategy
+
+#### Application Metrics
+```python
+from prometheus_client import Gauge
+
+ACTIVE_USERS = Gauge(
+    'active_users_total',
+    'Number of active users'
+)
+
+CACHE_HIT_RATIO = Gauge(
+    'cache_hit_ratio',
+    'Cache hit ratio'
+)
+
+DB_CONNECTION_POOL = Gauge(
+    'db_connection_pool_size',
+    'Database connection pool size'
+)
+```
+
+#### Performance Alerts
+```python
+async def check_performance_metrics():
+    """Monitor performance metrics and trigger alerts."""
+    response_time = await get_average_response_time()
+    if response_time > 1000:  # 1 second
+        await send_alert(
+            "High Response Time",
+            f"Average response time: {response_time}ms"
+        )
+```
+
