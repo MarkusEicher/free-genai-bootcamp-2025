@@ -44,19 +44,33 @@ export function DashboardStats() {
     return (
       <Card className="p-6">
         <div role="alert" className={`${colors.text.error}`}>
-          <p>{error?.message || 'Failed to load dashboard statistics'}</p>
+          <p>{error instanceof Error ? error.message : 'Failed to load dashboard statistics'}</p>
         </div>
       </Card>
     );
   }
 
-  if (!data) {
-    return (
-      <Card className="p-6">
-        <div className={colors.text.secondary}>No data available</div>
-      </Card>
-    );
-  }
+  // Default stats when data is not available
+  const defaultStats = {
+    success_rate: 0,
+    study_sessions_count: 0,
+    active_activities_count: 0,
+    active_groups_count: 0,
+    study_streak: {
+      current_streak: 0,
+      longest_streak: 0
+    }
+  };
+
+  // Safely merge data with defaults
+  const stats = {
+    ...defaultStats,
+    ...data,
+    study_streak: {
+      ...defaultStats.study_streak,
+      ...(data?.study_streak || {})
+    }
+  };
 
   return (
     <Card className="p-6">
@@ -67,26 +81,26 @@ export function DashboardStats() {
       >
         <StatItem
           label="Success Rate"
-          value={`${(data.success_rate * 100).toFixed(1)}%`}
+          value={`${(stats.success_rate * 100).toFixed(1)}%`}
           description="Overall learning success"
         />
         
         <StatItem
           label="Study Sessions"
-          value={data.study_sessions_count}
+          value={stats.study_sessions_count}
           description="Total completed sessions"
         />
 
         <StatItem
           label="Active Activities"
-          value={data.active_activities_count}
+          value={stats.active_activities_count}
           description="Currently active learning tasks"
         />
 
         <StatItem
           label="Study Streak"
-          value={data.study_streak.current_streak}
-          description={`Best streak: ${data.study_streak.longest_streak} days`}
+          value={stats.study_streak.current_streak}
+          description={`Best streak: ${stats.study_streak.longest_streak} days`}
         />
       </dl>
     </Card>

@@ -1,0 +1,35 @@
+name: Setup Local Fonts
+on:
+  push:
+    paths:
+      - 'frontend/**'
+  workflow_dispatch:
+
+jobs:
+  setup-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y woff2 curl
+      
+      - name: Download Fonts
+        run: |
+          cd frontend
+          chmod +x scripts/download-fonts.sh
+          ./scripts/download-fonts.sh
+      
+      - name: Verify Font Files
+        run: |
+          ls -l frontend/public/fonts/{inter,roboto}
+          
+      - name: Cache Fonts
+        uses: actions/cache@v3
+        with:
+          path: frontend/public/fonts
+          key: ${{ runner.os }}-fonts-${{ hashFiles('frontend/scripts/download-fonts.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-fonts- 

@@ -25,34 +25,55 @@ export class ApiError extends Error {
 // Single fetchApi implementation
 export async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { 
+    params?: { 
+      args?: any[];
+      kwargs?: Record<string, any>;
+    } 
+  } = {}
 ): Promise<T> {
-  const url = `${API_CONFIG.baseURL}/${endpoint.replace(/^\//, '')}`;
-  
-  console.log('Fetching:', url); // Debug log
+  const { params, ...fetchOptions } = options;
+  let url = `${API_CONFIG.baseURL}/${endpoint.replace(/^\//, '')}`;
+
+  // Add query parameters if they exist
+  if (params) {
+    const searchParams = new URLSearchParams();
+    if (params.args) {
+      searchParams.append('args', JSON.stringify(params.args));
+    }
+    if (params.kwargs) {
+      searchParams.append('kwargs', JSON.stringify(params.kwargs));
+    }
+    if (searchParams.toString()) {
+      url += `?${searchParams.toString()}`;
+    }
+  }
+
+  console.log('Fetching:', url);
 
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers: {
         ...API_CONFIG.headers,
-        ...options.headers,
+        ...fetchOptions.headers,
       },
       credentials: 'same-origin',
     });
 
     if (!response.ok) {
-      // Enhanced error logging
       console.error('API Error:', {
         url,
         status: response.status,
         statusText: response.statusText,
-        timestamp: new Date().toISOString()
       });
 
-      // Try to get error details from response
       const errorData = await response.text();
       console.error('Error details:', errorData);
+
+      if (response.status === 404) {
+        return {} as T; // Return empty object for 404s
+      }
 
       throw new ApiError(
         response.status === 422 ? 'Invalid request data' : 'Failed to fetch data',
@@ -62,7 +83,6 @@ export async function fetchApi<T>(
     }
 
     const data = await response.json();
-    console.log('Response:', data); // Debug log
     return data;
   } catch (error) {
     console.error('Fetch error:', error);

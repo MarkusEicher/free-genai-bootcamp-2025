@@ -28,21 +28,28 @@ export interface LatestSession {
   incorrect_count: number;
 }
 
-export interface ProgressDataPoint {
-  date: string
-  masteredWords: number
-  totalWords: number
+export interface DashboardData {
+  stats: DashboardStats;
+  progress: DashboardProgress;
+  latestSessions: LatestSession[];
 }
 
-export interface Activity {
-  id: number
-  type: 'practice' | 'word_added' | 'group_created' | 'achievement_earned'
-  description: string
-  timestamp: string
-  metadata: {
-    wordId?: number
-    groupId?: number
-    achievementId?: number
-    score?: number
-  }
-} 
+// Remove unused interfaces that were for the old implementation
+// export interface ProgressDataPoint {
+//   date: string;
+//   masteredWords: number;
+//   totalWords: number;
+// }
+
+// export interface Activity {
+//   id: number;
+//   type: 'practice' | 'word_added' | 'group_created' | 'achievement_earned';
+//   description: string;
+//   timestamp: string;
+//   metadata: {
+//     wordId?: number;
+//     groupId?: number;
+//     achievementId?: number;
+//     score?: number;
+//   };
+// } 

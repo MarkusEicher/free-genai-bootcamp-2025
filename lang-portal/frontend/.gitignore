@@ -1,0 +1,5 @@
+# Fonts
+public/fonts/**/*.woff2
+public/fonts/**/*.woff
+public/fonts/**/*.ttf
+public/fonts/**/*.eot 

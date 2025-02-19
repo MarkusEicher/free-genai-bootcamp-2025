@@ -138,6 +138,12 @@ interface LatestSession {
 - [x] Remove potentially sensitive endpoints
 - [ ] Update remaining API endpoints
 
+### 2. Data Model Synchronization
+- [ ] Update dashboard models
+- [ ] Update session models
+- [ ] Update vocabulary models
+- [ ] Remove sensitive fields from models
+
 ## Testing Requirements
 
 ### 1. Unit Tests

@@ -6,7 +6,15 @@ import { dashboardApi } from '../api/dashboard'
 import { vocabularyApi } from '../api/vocabulary'
 import { activitiesApi } from '../api/activities'
 
-export const queryClient = new QueryClient()
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30000,
+    },
+  },
+});
 
 // Constants for stale times
 const STATS_STALE_TIME = 5 * 60 * 1000; // 5 minutes
