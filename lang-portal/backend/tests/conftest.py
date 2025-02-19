@@ -1,9 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
-from httpx import ASGITransport, WSGITransport
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime, UTC, timedelta
+
 from app.core.config import settings
 from app.db.base_class import Base
 from app.db.database import get_db
@@ -13,11 +14,8 @@ from app.models.language_pair import LanguagePair
 from app.models.vocabulary import Vocabulary
 from app.models.vocabulary_group import VocabularyGroup
 from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
+from app.models.progress import VocabularyProgress
 from app.core.cache import test_redis_client
-from alembic.config import Config
-from alembic import command
-from sqlalchemy import event
-from datetime import datetime, UTC, timedelta
 
 # Test database setup
 TEST_DATABASE_URL = settings.TEST_DATABASE_URL
@@ -64,8 +62,15 @@ def db_session(test_engine) -> Session:
     transaction.rollback()
     connection.close()
 
+# Alias for db_session for backward compatibility
+@pytest.fixture(scope="function")
+def db(db_session: Session) -> Session:
+    """Alias for db_session fixture"""
+    return db_session
+
 @pytest.fixture(scope="function")
 def client(db_session: Session):
+    """Create a test client with database session."""
     def override_get_db():
         try:
             yield db_session
@@ -77,9 +82,9 @@ def client(db_session: Session):
         yield test_client
     app.dependency_overrides.clear()
 
-# Model fixtures
 @pytest.fixture(scope="function")
 def test_language(db_session: Session):
+    """Create a test language."""
     language = Language(code="en", name="English")
     db_session.add(language)
     db_session.commit()
@@ -87,6 +92,7 @@ def test_language(db_session: Session):
 
 @pytest.fixture(scope="function")
 def test_language_pair(db_session: Session, test_language):
+    """Create a test language pair."""
     target_language = Language(code="de", name="German")
     db_session.add(target_language)
     db_session.commit()
@@ -101,6 +107,7 @@ def test_language_pair(db_session: Session, test_language):
 
 @pytest.fixture(scope="function")
 def test_vocabulary(db_session: Session, test_language_pair):
+    """Create a test vocabulary."""
     vocabulary = Vocabulary(
         word="test",
         translation="test",
@@ -111,12 +118,25 @@ def test_vocabulary(db_session: Session, test_language_pair):
     return vocabulary
 
 @pytest.fixture(scope="function")
+def test_vocabulary_group(db_session: Session, test_language_pair):
+    """Create a test vocabulary group."""
+    group = VocabularyGroup(
+        name="Test Group",
+        description="Test Description",
+        language_pair_id=test_language_pair.id
+    )
+    db_session.add(group)
+    db_session.commit()
+    return group
+
+@pytest.fixture(scope="function")
 def test_activity(db_session: Session):
     """Create a test activity."""
     activity = Activity(
         type="flashcard",
         name="Test Activity",
-        description="Test Description"
+        description="Test Description",
+        practice_direction="forward"
     )
     db_session.add(activity)
     db_session.commit()
@@ -166,17 +186,6 @@ def test_vocabulary_with_attempts(db_session: Session, test_vocabulary, test_act
         db_session.add(attempt)
     db_session.commit()
     return test_vocabulary
-
-@pytest.fixture(scope="function")
-def test_vocabulary_group(db_session: Session, test_language_pair):
-    group = VocabularyGroup(
-        name="Test Group",
-        description="Test Description",
-        language_pair_id=test_language_pair.id
-    )
-    db_session.add(group)
-    db_session.commit()
-    return group
 
 @pytest.fixture(autouse=True)
 def clear_cache():

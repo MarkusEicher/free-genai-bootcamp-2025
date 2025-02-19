@@ -23,11 +23,12 @@ class Activity(Base):
     practice_direction = Column(String, nullable=False, server_default='forward')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    sessions = relationship("Session", back_populates="activity")
+    sessions = relationship("Session", back_populates="activity", cascade="all, delete-orphan")
     vocabulary_groups = relationship(
         "VocabularyGroup",
         secondary=activity_vocabulary_group,
-        back_populates="activities"
+        back_populates="activities",
+        lazy="joined"  # Eager load groups for better performance
     )
 
     def get_practice_vocabulary(self) -> list:
@@ -38,6 +39,24 @@ class Activity(Base):
             items.extend(group.get_practice_items(reverse=reverse))
         return items
 
+    @property
+    def vocabulary_count(self) -> int:
+        """Get total number of vocabulary items across all groups."""
+        return sum(len(group.vocabularies) for group in self.vocabulary_groups)
+
+    @property
+    def unique_vocabulary_count(self) -> int:
+        """Get number of unique vocabulary items across all groups."""
+        unique_ids = set()
+        for group in self.vocabulary_groups:
+            unique_ids.update(v.id for v in group.vocabularies)
+        return len(unique_ids)
+
+    @property
+    def language_pairs(self) -> set:
+        """Get unique language pairs used in this activity's groups."""
+        return {group.language_pair_id for group in self.vocabulary_groups}
+
 class Session(Base):
     __tablename__ = 'sessions'
     __table_args__ = (
@@ -47,13 +66,13 @@ class Session(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    activity_id = Column(Integer, ForeignKey('activities.id'), nullable=False)
+    activity_id = Column(Integer, ForeignKey('activities.id', ondelete='CASCADE'), nullable=False)
     start_time = Column(DateTime(timezone=True), nullable=False)
     end_time = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     activity = relationship("Activity", back_populates="sessions")
-    attempts = relationship("SessionAttempt", back_populates="session")
+    attempts = relationship("SessionAttempt", back_populates="session", cascade="all, delete-orphan")
 
     @property
     def success_rate(self) -> float:
@@ -79,17 +98,24 @@ class SessionAttempt(Base):
         Index('ix_session_attempts_session_id', 'session_id'),
         Index('ix_session_attempts_vocabulary_id', 'vocabulary_id'),
         Index('ix_session_attempts_is_correct', 'is_correct'),
+        Index('ix_session_attempts_created_at', 'created_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey('sessions.id'), nullable=False)
-    vocabulary_id = Column(Integer, ForeignKey('vocabularies.id'), nullable=False)
+    session_id = Column(Integer, ForeignKey('sessions.id', ondelete='CASCADE'), nullable=False)
+    vocabulary_id = Column(Integer, ForeignKey('vocabularies.id', ondelete='CASCADE'), nullable=False)
     is_correct = Column(Boolean, nullable=False)
     response_time_ms = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("Session", back_populates="attempts")
     vocabulary = relationship("Vocabulary")
+
+    def __init__(self, **kwargs):
+        """Initialize with validation."""
+        super().__init__(**kwargs)
+        if self.response_time_ms <= 0:
+            raise ValueError("Response time must be positive")
 
 # Import at bottom to avoid circular imports
 from app.models.vocabulary import Vocabulary

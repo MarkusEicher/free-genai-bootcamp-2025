@@ -39,5 +39,25 @@ filterwarnings = [
 cache_dir = ".pytest_cache"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=app --cov-report=term-missing"
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = """
+    --cov=app
+    --cov-report=term-missing
+    --cov-report=html
+    --verbose
+    --capture=no
+"""
+norecursedirs = [
+    "*.egg",
+    ".eggs",
+    "dist",
+    "build",
+    ".git",
+    ".tox",
+    ".env",
+    ".venv",
+    "venv",
+    "__pycache__"
+]
 
