@@ -31,14 +31,14 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <span 
-              className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              className="text-sm font-medium text-gray-900 dark:text-gray-400"
               id={`progress-label-${label.toLowerCase().replace(/\s+/g, '-')}`}
             >
               {label}
             </span>
           </div>
           <div 
-            className="text-sm text-gray-600 dark:text-gray-400"
+            className="text-sm text-gray-700 dark:text-gray-400"
             aria-live="polite"
             aria-atomic="true"
           >
@@ -111,7 +111,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
     >
       <div className="space-y-2">
         <h3 
-          className="text-lg font-medium text-gray-900 dark:text-gray-100"
+          className="text-lg font-medium text-gray-900 dark:text-white"
           id="progress-section-title"
         >
           Overall Progress
@@ -145,7 +145,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
             role="listitem"
           >
             <h4 
-              className="text-sm font-medium text-gray-500 dark:text-gray-400"
+              className="text-sm font-medium text-gray-700 dark:text-gray-200"
               id="mastered-items-label"
             >
               Items Mastered
@@ -155,7 +155,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
               aria-labelledby="mastered-items-label"
             >
               {masteredItems.toString()}
-              <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+              <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
                 / {totalItems.toString()}
               </span>
             </p>
@@ -166,7 +166,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
             role="listitem"
           >
             <h4 
-              className="text-sm font-medium text-gray-500 dark:text-gray-400"
+              className="text-sm font-medium text-gray-700 dark:text-gray-200"
               id="in-progress-items-label"
             >
               Items in Progress
@@ -176,7 +176,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
               aria-labelledby="in-progress-items-label"
             >
               {inProgressItems.toString()}
-              <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+              <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
                 items
               </span>
             </p>

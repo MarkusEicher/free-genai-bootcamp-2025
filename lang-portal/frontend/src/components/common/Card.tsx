@@ -1,15 +1,21 @@
-import { ReactNode } from 'react'
+import React from 'react';
 
-interface CardProps {
-  children: ReactNode
-  className?: string
-  onClick?: () => void
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+  className?: string;
 }
 
-export default function Card({ children, className = '', onClick }: CardProps) {
+export const Card: React.FC<CardProps> = ({ 
+  children, 
+  className = '', 
+  ...props 
+}) => {
   return (
-    <div onClick={onClick} className={`bg-white rounded-lg shadow ${className}`}>
+    <div 
+      className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm ${className}`}
+      {...props}
+    >
       {children}
     </div>
-  )
-} 
+  );
+}; 

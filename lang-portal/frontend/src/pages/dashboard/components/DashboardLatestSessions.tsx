@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Card } from '../../../components/common';
+import { Card } from '../../../components/common/Card';
 import type { LatestSession } from '../../../types/dashboard';
 
 interface SessionItemProps {
@@ -42,7 +42,7 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
   return (
     <div 
       ref={itemRef}
-      className="p-4 border-b last:border-b-0 border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
+      className="p-4 border-b last:border-b-0 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
       role="article"
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -53,23 +53,23 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
         <div>
           <h4 
             id={`session-title-${index}`}
-            className="text-sm font-medium text-gray-900 dark:text-gray-100"
+            className="text-base font-semibold text-gray-900 dark:text-white"
           >
             {activityName}
           </h4>
           <p 
             id={`session-details-${index}`}
-            className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            className="mt-1 text-sm text-gray-800 dark:text-gray-200"
           >
             {activityType} • {practiceDirection} • {groupCount} groups
           </p>
         </div>
         <div className="text-right">
           <p 
-            className={`text-sm font-medium ${
-              successRate >= 80 ? 'text-green-600 dark:text-green-400' : 
-              successRate >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 
-              'text-red-600 dark:text-red-400'
+            className={`text-base font-semibold ${
+              successRate >= 80 ? 'text-green-900 dark:text-green-200' : 
+              successRate >= 60 ? 'text-amber-900 dark:text-amber-200' : 
+              'text-red-900 dark:text-red-200'
             }`}
             id={`session-stats-${index}`}
             aria-label={`${getSuccessRateDescription(successRate)} with ${successRate}% success rate`}
@@ -77,7 +77,7 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
             {successRate}% Success
           </p>
           <p 
-            className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            className="mt-1 text-sm text-gray-800 dark:text-gray-200"
             aria-label={`${correctCount} correct answers out of ${totalAnswers} total answers`}
           >
             {correctCount} / {totalAnswers} correct
@@ -86,7 +86,7 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
       </div>
       
       <div 
-        className="mt-2 flex items-center text-xs text-gray-500 dark:text-gray-400"
+        className="mt-2 flex items-center text-sm text-gray-800 dark:text-gray-200"
         aria-label={`Session time: ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}${
           duration ? `, Duration: ${duration} minutes` : ''
         }`}
@@ -103,7 +103,7 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
 
       {/* Progress Bar */}
       <div 
-        className="mt-2 h-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"
+        className="mt-3 h-2 w-full bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden"
         role="progressbar"
         aria-valuenow={successRate}
         aria-valuemin={0}
@@ -112,9 +112,9 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
       >
         <div
           className={`h-full transition-all duration-300 ${
-            successRate >= 80 ? 'bg-green-600 dark:bg-green-500' :
-            successRate >= 60 ? 'bg-yellow-600 dark:bg-yellow-500' :
-            'bg-red-600 dark:bg-red-500'
+            successRate >= 80 ? 'bg-green-800 dark:bg-green-600' :
+            successRate >= 60 ? 'bg-amber-800 dark:bg-amber-600' :
+            'bg-red-800 dark:bg-red-600'
           }`}
           style={{ width: `${successRate}%` }}
         />
@@ -133,7 +133,7 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
   if (!sessions) {
     return (
       <Card className="p-6">
-        <div className="text-center text-gray-500">
+        <div className="text-center text-gray-700 dark:text-gray-300">
           Loading sessions...
         </div>
       </Card>
@@ -143,7 +143,7 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
   if (!Array.isArray(sessions) || sessions.length === 0) {
     return (
       <Card className="p-6">
-        <div className="text-center text-gray-500">
+        <div className="text-center text-gray-700 dark:text-gray-300">
           No recent sessions found
         </div>
       </Card>
@@ -152,31 +152,16 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
 
   return (
     <Card className="p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50 mb-4">
+        Latest Sessions
+      </h3>
       <div className="space-y-4">
         {sessions.map((session, index) => (
-          <div
+          <SessionItem 
             key={`${session.activity_name}-${session.start_time}-${index}`}
-            className="border-b last:border-b-0 pb-4 last:pb-0"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                  {session.activity_name}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {new Date(session.start_time).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-medium text-gray-900 dark:text-gray-100">
-                  {(session.success_rate * 100).toFixed(0)}%
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {session.correct_count} / {session.correct_count + session.incorrect_count}
-                </p>
-              </div>
-            </div>
-          </div>
+            session={session}
+            index={index}
+          />
         ))}
       </div>
     </Card>

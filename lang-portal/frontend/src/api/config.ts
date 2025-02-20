@@ -26,9 +26,10 @@ export async function fetchApi<T>(
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
 
-  // Remove any leading slash from the endpoint
+  // Remove any leading slash and ensure endpoint doesn't start with BASE_URL
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-  const url = new URL(`${BASE_URL}/${cleanEndpoint}`, window.location.origin);
+  const finalEndpoint = cleanEndpoint.startsWith('api/v1/') ? cleanEndpoint : `api/v1/${cleanEndpoint}`;
+  const url = new URL(finalEndpoint, window.location.origin);
   
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
