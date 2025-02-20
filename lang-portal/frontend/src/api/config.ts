@@ -3,14 +3,12 @@
  * Centralizes API settings and ensures local-only access
  */
 
-export const API_CONFIG = {
-  baseURL: '/api/v1',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-} as const;
+import { API_VERSION, BASE_URL } from './constants';
 
-// Privacy-focused error handling without external logging
+interface FetchApiOptions extends RequestInit {
+  params?: Record<string, any>;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -22,61 +20,52 @@ export class ApiError extends Error {
   }
 }
 
-// Single fetchApi implementation
 export async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit & { 
-    params?: { 
-      args?: any[];
-      kwargs?: Record<string, any>;
-    } 
-  } = {}
+  options: FetchApiOptions = {}
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
-  let url = `${API_CONFIG.baseURL}/${endpoint.replace(/^\//, '')}`;
 
-  // Add query parameters if they exist
+  // Remove any leading slash from the endpoint
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  const url = new URL(`${BASE_URL}/${cleanEndpoint}`, window.location.origin);
+  
   if (params) {
-    const searchParams = new URLSearchParams();
-    if (params.args) {
-      searchParams.append('args', JSON.stringify(params.args));
-    }
-    if (params.kwargs) {
-      searchParams.append('kwargs', JSON.stringify(params.kwargs));
-    }
-    if (searchParams.toString()) {
-      url += `?${searchParams.toString()}`;
-    }
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.append(key, value.toString());
+      }
+    });
   }
 
-  console.log('Fetching:', url);
+  console.log('Fetching:', url.toString());
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       ...fetchOptions,
       headers: {
-        ...API_CONFIG.headers,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
         ...fetchOptions.headers,
       },
-      credentials: 'same-origin',
     });
 
     if (!response.ok) {
-      console.error('API Error:', {
-        url,
-        status: response.status,
-        statusText: response.statusText,
-      });
-
-      const errorData = await response.text();
-      console.error('Error details:', errorData);
-
-      if (response.status === 404) {
-        return {} as T; // Return empty object for 404s
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: 'An unknown error occurred' };
       }
 
+      console.error('API Error:', {
+        status: response.status,
+        url: url.toString(),
+        errorData
+      });
+
       throw new ApiError(
-        response.status === 422 ? 'Invalid request data' : 'Failed to fetch data',
+        errorData.detail || 'An error occurred',
         response.status,
         errorData
       );
@@ -85,10 +74,19 @@ export async function fetchApi<T>(
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Fetch error:', error);
-    throw error instanceof ApiError ? error : new ApiError(
-      'Network error. Please check your connection.',
-      500
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    console.error('Fetch error:', {
+      error,
+      endpoint: url.toString()
+    });
+    
+    throw new ApiError(
+      'Failed to fetch data',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

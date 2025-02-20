@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode } from 'react'
+import React, { createContext, useContext, ReactNode } from 'react'
 import { useDashboardStats } from '../hooks/useApi'
 import type { DashboardStats } from '../types/dashboard'
 
@@ -11,8 +11,8 @@ interface StatsContextType {
 
 const StatsContext = createContext<StatsContextType | undefined>(undefined)
 
-// Export as named function for Fast Refresh compatibility
-export function StatsProvider({ children }: { children: ReactNode }) {
+// Export the provider component
+export const StatsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { data: stats, isLoading, isError, error } = useDashboardStats()
 
   const value = {
@@ -29,8 +29,8 @@ export function StatsProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// Export as named function for Fast Refresh compatibility
-export function useStatsContext() {
+// Export the hook
+export const useStatsContext = (): StatsContextType => {
   const context = useContext(StatsContext)
   if (context === undefined) {
     throw new Error('useStatsContext must be used within a StatsProvider')

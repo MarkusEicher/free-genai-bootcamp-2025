@@ -1,5 +1,5 @@
 import React from 'react';
-import { Switch } from 'react-router-dom';
+import { Switch, Route, Redirect } from 'react-router-dom';
 import { ErrorBoundaryRoute } from './components/error/ErrorBoundaryRoute';
 import { Dashboard } from './pages/Dashboard';
 import { Vocabulary } from './pages/Vocabulary';
@@ -9,7 +9,11 @@ import { NotFound } from './pages/NotFound';
 export const AppRoutes: React.FC = () => {
   return (
     <Switch>
-      <ErrorBoundaryRoute exact path="/">
+      <Route exact path="/">
+        <Redirect to="/dashboard" />
+      </Route>
+
+      <ErrorBoundaryRoute exact path="/dashboard">
         <Dashboard />
       </ErrorBoundaryRoute>
 

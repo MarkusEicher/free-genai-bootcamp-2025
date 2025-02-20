@@ -26,10 +26,8 @@ export const dashboardApi = {
     try {
       return await fetchApi<DashboardStats>(API_ENDPOINTS.DASHBOARD.STATS);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return defaultStats;
-      }
-      throw error;
+      console.error('Failed to fetch dashboard stats:', error);
+      return defaultStats;
     }
   },
 
@@ -37,23 +35,19 @@ export const dashboardApi = {
     try {
       return await fetchApi<DashboardProgress>(API_ENDPOINTS.DASHBOARD.PROGRESS);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return defaultProgress;
-      }
-      throw error;
+      console.error('Failed to fetch dashboard progress:', error);
+      return defaultProgress;
     }
   },
 
   getLatestSessions: async (limit: number = 5): Promise<LatestSession[]> => {
     try {
       return await fetchApi<LatestSession[]>(API_ENDPOINTS.DASHBOARD.LATEST_SESSIONS, {
-        params: { kwargs: { limit } }
+        params: { limit }
       });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return [];
-      }
-      throw error;
+      console.error('Failed to fetch latest sessions:', error);
+      return [];
     }
   },
 
@@ -64,9 +58,9 @@ export const dashboardApi = {
   getDashboardData: async (sessionsLimit: number = 5) => {
     try {
       const [stats, progress, latestSessions] = await Promise.all([
-        this.getDashboardStats(),
-        this.getDashboardProgress(),
-        this.getLatestSessions(sessionsLimit)
+        dashboardApi.getDashboardStats(),
+        dashboardApi.getDashboardProgress(),
+        dashboardApi.getLatestSessions(sessionsLimit)
       ]);
 
       return {
@@ -75,12 +69,7 @@ export const dashboardApi = {
         latestSessions
       };
     } catch (error) {
-      // Log error for debugging but don't expose details to user
-      console.error('Dashboard data fetch error:', {
-        timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-
+      console.error('Dashboard data fetch error:', error);
       return {
         stats: defaultStats,
         progress: defaultProgress,

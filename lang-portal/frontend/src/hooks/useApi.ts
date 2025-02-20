@@ -5,6 +5,8 @@ import type { UserProfile, UpdateProfileData } from '../types/profile'
 import { dashboardApi } from '../api/dashboard'
 import { vocabularyApi } from '../api/vocabulary'
 import { activitiesApi } from '../api/activities'
+import { useLoadingState } from './useLoadingState'
+import type { DashboardData } from '../types/dashboard'
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -447,12 +449,38 @@ export function useDashboardProgress() {
   })
 }
 
-export function useDashboardData(sessionsLimit: number = 5) {
+export function useDashboardData() {
   return useQuery({
-    queryKey: ['dashboard-data', sessionsLimit],
-    queryFn: () => dashboardApi.getDashboardData(sessionsLimit),
+    queryKey: ['dashboard-data'],
+    queryFn: async () => {
+      try {
+        return await dashboardApi.getDashboardData(5);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        throw error;
+      }
+    },
     staleTime: STATS_STALE_TIME,
-  })
+    initialData: {
+      stats: {
+        success_rate: 0,
+        study_sessions_count: 0,
+        active_activities_count: 0,
+        active_groups_count: 0,
+        study_streak: {
+          current_streak: 0,
+          longest_streak: 0
+        }
+      },
+      progress: {
+        total_items: 0,
+        studied_items: 0,
+        mastered_items: 0,
+        progress_percentage: 0
+      },
+      latestSessions: []
+    }
+  });
 }
 
 export function useUserProfile() {

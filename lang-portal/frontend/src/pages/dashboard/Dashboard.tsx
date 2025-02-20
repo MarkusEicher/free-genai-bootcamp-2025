@@ -1,12 +1,19 @@
 import React from 'react';
-import { DashboardStats } from '../components/dashboard/DashboardStats';
-import { DashboardProgress } from '../components/dashboard/DashboardProgress';
-import { LatestSessions } from '../components/dashboard/LatestSessions';
-import { useDashboardData } from '../hooks/useApi';
-import { RefreshIcon } from '../components/icons/RefreshIcon';
+import { DashboardStats } from './components/DashboardStats';
+import { DashboardProgress } from './components/DashboardProgress';
+import { DashboardLatestSessions } from './components/DashboardLatestSessions';
+import { useDashboardData } from '../../hooks/useApi';
+import { RefreshIcon } from '../../components/icons/RefreshIcon';
+import { useLoadingState } from '../../hooks/useLoadingState';
+import { SkeletonCard } from '../../components/common/LoadingState';
+import { ApiErrorBoundary } from '../../components/error/ApiErrorBoundary';
+import { SkipLink } from '../../components/common/SkipLink';
+import { dashboardApi } from '../../api/dashboard';
+import type { DashboardData } from '../../types/dashboard';
+import { useDashboardKeyboardNav } from '../../hooks/useDashboardKeyboardNav';
 
 const DashboardContent: React.FC<{
-  data: any;
+  data: DashboardData;
   isError: boolean;
   error: Error | null;
   refetch: () => void;
@@ -38,7 +45,7 @@ const DashboardContent: React.FC<{
         className="bg-white rounded-lg shadow-sm"
       >
         <h2 id="stats-heading" className="sr-only">Dashboard Statistics</h2>
-        <DashboardStats stats={data?.stats} />
+        <DashboardStats stats={data.stats} />
       </section>
 
       <section 
@@ -46,7 +53,7 @@ const DashboardContent: React.FC<{
         className="bg-white rounded-lg shadow-sm"
       >
         <h2 id="progress-heading" className="sr-only">Learning Progress</h2>
-        <DashboardProgress progress={data?.progress} />
+        <DashboardProgress progress={data.progress} />
       </section>
 
       <section 
@@ -54,19 +61,36 @@ const DashboardContent: React.FC<{
         className="bg-white rounded-lg shadow-sm"
       >
         <h2 id="activity-heading" className="sr-only">Recent Activity</h2>
-        <LatestSessions sessions={data?.latestSessions} />
+        <DashboardLatestSessions sessions={data.latestSessions} />
       </section>
     </div>
   );
 };
 
-export default function DashboardPage() {
+export default function Dashboard() {
   const { data, isLoading, isError, error, refetch } = useDashboardData();
+  const { currentSection, handleKeyDown } = useDashboardKeyboardNav();
+
+  if (isLoading) {
+    return (
+      <div className="p-4 space-y-4" role="status" aria-label="Loading dashboard">
+        <SkeletonCard className="h-32" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonCard className="h-64" />
+      </div>
+    );
+  }
 
   return (
     <main 
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
       aria-busy={isLoading}
+      onKeyDown={handleKeyDown}
     >
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-semibold text-gray-900" tabIndex={-1}>

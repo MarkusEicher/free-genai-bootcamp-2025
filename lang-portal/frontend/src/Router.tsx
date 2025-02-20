@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Navigation from './components/Navigation'
-import DashboardPage from './pages/DashboardPage'
+import Dashboard from './pages/dashboard/Dashboard'
 import VocabularyPage from './pages/VocabularyPage'
 import PracticePage from './pages/PracticePage'
 import SettingsPage from './pages/SettingsPage'
@@ -12,7 +12,8 @@ export default function Router() {
         <Navigation />
         <main className="py-6">
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/vocabulary" element={<VocabularyPage />} />
             <Route path="/practice" element={<PracticePage />} />
             <Route path="/settings" element={<SettingsPage />} />

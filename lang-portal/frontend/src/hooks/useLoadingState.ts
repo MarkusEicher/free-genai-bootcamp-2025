@@ -1,10 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ApiError } from '../api/config';
 
 interface UseLoadingStateOptions<T> {
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
   initialData?: T;
+  onMount?: boolean;
+  initialFetch?: () => Promise<T>;
 }
 
 interface LoadingState<T> {
@@ -45,6 +47,12 @@ export function useLoadingState<T>(options: UseLoadingStateOptions<T> = {}) {
     },
     [options]
   );
+
+  useEffect(() => {
+    if (options.onMount && options.initialFetch) {
+      execute(options.initialFetch());
+    }
+  }, [execute, options.onMount, options.initialFetch]);
 
   const reset = useCallback(() => {
     setState({
