@@ -591,6 +591,7 @@ def large_data():
     return "x" * (1024 * 1024 * 2)  # 2MB
 
 class TestLocalCache:
+    """Test LocalCache implementation."""
     def test_singleton_instance(self):
         """Test that LocalCache is a singleton."""
         cache1 = LocalCache.get_instance()
@@ -669,9 +670,11 @@ class TestLocalCache:
     def test_size_limits(self, cache, large_data):
         """Test cache size limits."""
         # Test entry size limit
-        with pytest.raises(HTTPException) as exc_info:
+        try:
             cache.set('large_entry', large_data)
-        assert exc_info.value.status_code == 413
+            pytest.fail("Should have raised HTTPException")
+        except HTTPException as exc:
+            assert exc.status_code == 413
         
         # Test total cache size limit
         for i in range(100):
