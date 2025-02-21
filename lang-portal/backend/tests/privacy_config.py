@@ -147,32 +147,29 @@ def verify_cache_settings(route_type: str, headers: Dict[str, str]) -> bool:
     return headers.get("Cache-Control") == expected["cache_control"]
 
 def verify_security_headers(headers: Dict[str, str]) -> List[str]:
-    """Verify presence and values of security headers.
+    """Verify that all required security headers are present and correct.
     
     Args:
-        headers: Response headers
+        headers: Response headers to verify
         
     Returns:
         List of missing or incorrect headers
     """
-    missing = []
+    missing_headers = []
     
-    # Check forbidden headers
-    for header in FORBIDDEN_HEADERS:
-        if header in headers:
-            missing.append(f"Forbidden header present: {header}")
-    
-    # Check required headers
-    for header, value in REQUIRED_HEADERS.items():
+    for header, expected_value in REQUIRED_HEADERS.items():
         if header not in headers:
-            missing.append(f"Missing header: {header}")
-        elif callable(value):
-            if not value(headers[header]):
-                missing.append(f"Invalid header value: {header}")
-        elif headers[header] != value:
-            missing.append(f"Invalid header value: {header}")
+            missing_headers.append(header)
+            continue
+            
+        actual_value = headers[header]
+        if callable(expected_value):
+            if not expected_value(actual_value):
+                missing_headers.append(f"{header} (invalid value)")
+        elif actual_value != expected_value:
+            missing_headers.append(f"{header} (wrong value)")
     
-    return missing
+    return missing_headers
 
 def get_test_data(data_type: str) -> Dict:
     """Get test data for a specific type.

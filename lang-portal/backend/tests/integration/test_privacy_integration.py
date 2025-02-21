@@ -290,4 +290,148 @@ class TestPrivacyIntegration:
         
         # Verify no sensitive data in response
         data = response.json()
-        assert not contains_sensitive_data(json.dumps(data)) 
+        assert not contains_sensitive_data(json.dumps(data))
+    
+    def test_concurrent_access_privacy(self, client):
+        """Test privacy features under concurrent access."""
+        import threading
+        import queue
+        
+        results = queue.Queue()
+        def make_request():
+            try:
+                response = client.post("/api/v1/sessions/", json={
+                    "activity_id": 1,
+                    "user_agent": "Test Browser",
+                    "ip_address": "192.168.1.1"
+                })
+                results.put(("success", response))
+            except Exception as e:
+                results.put(("error", e))
+        
+        # Launch concurrent requests
+        threads = []
+        for _ in range(10):
+            t = threading.Thread(target=make_request)
+            t.start()
+            threads.append(t)
+        
+        # Wait for all threads
+        for t in threads:
+            t.join()
+        
+        # Check results
+        while not results.empty():
+            status, response = results.get()
+            if status == "success":
+                assert response.status_code == 200
+                data = response.json()
+                assert not contains_sensitive_data(json.dumps(data))
+                assert verify_security_headers(response.headers) == []
+            else:
+                pytest.fail(f"Request failed: {response}")
+    
+    def test_file_upload_privacy(self, client, tmp_path):
+        """Test privacy features for file uploads."""
+        import io
+        from PIL import Image
+        
+        # Create a test image with metadata
+        img = Image.new('RGB', (100, 100), color='red')
+        img_io = io.BytesIO()
+        img.save(img_io, 'JPEG', 
+                exif=bytes.fromhex('45786966'  # EXIF marker
+                                 '0000'        # byte order
+                                 '4D4D'        # EXIF data
+                                 '002A'        # TIFF marker
+                                 '00000008'    # IFD offset
+                                 '0001'        # number of directory entries
+                                 '0110'        # Model tag
+                                 '0002'        # ASCII string type
+                                 '00000007'    # 7 bytes
+                                 '00000026'    # data offset
+                                 '00000000'    # padding
+                                 '4950686F6E65' # "iPhone" as ASCII
+                                 '00'))        # NULL terminator
+        img_io.seek(0)
+        
+        # Test file upload
+        files = {
+            'file': ('test.jpg', img_io, 'image/jpeg')
+        }
+        data = {
+            'description': 'Test image with sensitive metadata',
+            'user_agent': 'Test Browser 1.0',
+            'ip_address': '192.168.1.1'
+        }
+        
+        response = client.post(
+            "/api/v1/vocabulary/upload",
+            files=files,
+            data=data
+        )
+        assert response.status_code == 200
+        
+        # Verify response privacy
+        response_data = response.json()
+        assert not contains_sensitive_data(json.dumps(response_data))
+        assert verify_security_headers(response.headers) == []
+        
+        # Verify file metadata privacy
+        file_info = response_data.get('file_info', {})
+        sensitive_fields = {'device', 'location', 'software', 'host'}
+        assert not any(field in file_info for field in sensitive_fields)
+        
+        # Verify secure file storage
+        file_path = file_info.get('path')
+        if file_path:
+            assert not file_path.startswith('/')  # No absolute paths
+            assert '..' not in file_path  # No directory traversal
+            assert file_path.endswith('.jpg')  # Correct extension
+        
+        # Verify file permissions if stored locally
+        if 'local_path' in file_info:
+            import os
+            path = tmp_path / file_info['local_path']
+            assert os.path.exists(path)
+            # Check file permissions (Unix-like systems)
+            if os.name == 'posix':
+                assert oct(os.stat(path).st_mode)[-3:] == '600'
+    
+    def test_secure_file_deletion(self, client, tmp_path):
+        """Test secure deletion of uploaded files."""
+        import os
+        import io
+        
+        # Create and upload a test file
+        test_data = b"sensitive test data" * 1000  # 16KB of data
+        files = {
+            'file': ('test.txt', io.BytesIO(test_data), 'text/plain')
+        }
+        
+        response = client.post(
+            "/api/v1/vocabulary/upload",
+            files=files
+        )
+        assert response.status_code == 200
+        file_info = response.json().get('file_info', {})
+        
+        # Request file deletion
+        if 'id' in file_info:
+            response = client.delete(f"/api/v1/vocabulary/files/{file_info['id']}")
+            assert response.status_code == 200
+            
+            # Verify file is actually deleted
+            if 'local_path' in file_info:
+                path = tmp_path / file_info['local_path']
+                
+                # File should not exist
+                assert not os.path.exists(path)
+                
+                # Check if the file content is securely wiped (if file still exists)
+                if os.path.exists(path):
+                    with open(path, 'rb') as f:
+                        content = f.read()
+                        # Content should be zeroed or random
+                        assert content != test_data
+                        assert len(set(content)) <= 1  # All bytes should be same (zeroed) 
