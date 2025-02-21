@@ -43,8 +43,9 @@ python_functions = ["test_*"]
 markers = [
     "privacy: Tests for privacy-focused features",
     "security: Tests for security features",
-    "integration: Integration tests",
+    "integration: Tests for integration tests",
     "cache: Tests for caching functionality",
+    "file_privacy: Tests for file handling privacy and security",
     "api: Tests for API endpoints",
     "headers: Tests for security headers",
     "sanitization: Tests for data sanitization",
