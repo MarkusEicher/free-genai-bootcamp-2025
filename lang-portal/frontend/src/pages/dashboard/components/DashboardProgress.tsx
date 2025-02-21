@@ -1,4 +1,8 @@
 import React, { useRef, useEffect } from 'react';
+import { Card } from '../../../components/common/Card';
+import { CacheStatus } from '../../../components/common/CacheStatus';
+import { useCacheableQuery } from '../../../hooks/useCacheableQuery';
+import { dashboardApi } from '../../../api/dashboard';
 import type { DashboardProgress as DashboardProgressType } from '../../../types/dashboard';
 
 interface ProgressBarProps {
@@ -69,11 +73,24 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 };
 
 interface DashboardProgressProps {
-  progress: DashboardProgressType;
+  className?: string;
 }
 
-export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }) => {
+export const DashboardProgress: React.FC<DashboardProgressProps> = ({ className = '' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  const {
+    data: progress,
+    isLoading,
+    error,
+    isCacheHit,
+    cacheStatus,
+    refetch
+  } = useCacheableQuery<DashboardProgressType>({
+    cacheKey: 'dashboard-progress',
+    queryFn: dashboardApi.getDashboardProgress,
+    cacheDuration: 5 * 60 * 1000 // 5 minutes
+  });
 
   useEffect(() => {
     // Ensure proper focus management
@@ -94,6 +111,37 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
     return () => container.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  if (error) {
+    return (
+      <Card className="p-6 bg-red-50 dark:bg-red-900/10">
+        <div className="text-red-800 dark:text-red-200">
+          Failed to load progress data
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+        >
+          Retry
+        </button>
+      </Card>
+    );
+  }
+
+  if (isLoading || !progress) {
+    return (
+      <Card className="p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
+          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   // Ensure numeric values
   const progressPercentage = typeof progress.progress_percentage === 'number' ? progress.progress_percentage : 0;
   const totalItems = typeof progress.total_items === 'number' ? progress.total_items : 0;
@@ -102,32 +150,45 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
   const inProgressItems = studiedItems - masteredItems;
 
   return (
-    <div 
-      ref={containerRef}
-      className="p-6 space-y-6"
-      role="region"
-      aria-label="Learning Progress"
-      tabIndex={0}
-    >
-      <div className="space-y-2">
-        <h3 
-          className="text-lg font-medium text-gray-900 dark:text-white"
-          id="progress-section-title"
-        >
-          Overall Progress
-        </h3>
-        <p 
-          className="text-sm text-gray-500 dark:text-gray-400"
-          id="progress-section-description"
-        >
-          Track your learning journey progress
-        </p>
+    <Card className={`p-6 ${className}`}>
+      <div className="flex justify-between items-center mb-6">
+        <div className="space-y-1">
+          <h2 
+            className="text-lg font-medium text-gray-900 dark:text-gray-50"
+            id="progress-section-title"
+          >
+            Learning Progress
+          </h2>
+          <p 
+            className="text-sm text-gray-500 dark:text-gray-400"
+            id="progress-section-description"
+          >
+            Track your learning journey
+          </p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <CacheStatus
+            isCacheHit={isCacheHit}
+            timestamp={cacheStatus?.timestamp}
+            expires={cacheStatus?.expires}
+          />
+          <button
+            onClick={() => refetch()}
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            aria-label="Refresh progress"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div 
-        className="space-y-4"
+        ref={containerRef}
+        className="space-y-6"
+        role="region"
         aria-labelledby="progress-section-title"
         aria-describedby="progress-section-description"
+        tabIndex={0}
       >
         <ProgressBar
           percentage={progressPercentage}
@@ -136,7 +197,7 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
         />
 
         <div 
-          className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
           role="list"
           aria-label="Progress Details"
         >
@@ -144,19 +205,19 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
             className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4"
             role="listitem"
           >
-            <h4 
+            <h3 
               className="text-sm font-medium text-gray-700 dark:text-gray-200"
               id="mastered-items-label"
             >
               Items Mastered
-            </h4>
+            </h3>
             <p 
               className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100"
               aria-labelledby="mastered-items-label"
             >
-              {masteredItems.toString()}
+              {masteredItems}
               <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
-                / {totalItems.toString()}
+                / {totalItems}
               </span>
             </p>
           </div>
@@ -165,17 +226,17 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
             className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4"
             role="listitem"
           >
-            <h4 
+            <h3 
               className="text-sm font-medium text-gray-700 dark:text-gray-200"
               id="in-progress-items-label"
             >
               Items in Progress
-            </h4>
+            </h3>
             <p 
               className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100"
               aria-labelledby="in-progress-items-label"
             >
-              {inProgressItems.toString()}
+              {inProgressItems}
               <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
                 items
               </span>
@@ -183,55 +244,6 @@ export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress }
           </div>
         </div>
       </div>
-
-      {/* SVG Visualization */}
-      <div 
-        className="mt-6" 
-        role="img" 
-        aria-label={`Progress visualization: ${progressPercentage.toFixed(1)}% complete`}
-      >
-        <svg
-          className="w-full h-24"
-          viewBox="0 0 400 100"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          {/* Background */}
-          <rect
-            x="0"
-            y="20"
-            width="400"
-            height="60"
-            fill="var(--color-gray-200)"
-            className="dark:fill-gray-700"
-          />
-          
-          {/* Progress Bar */}
-          <rect
-            x="0"
-            y="20"
-            width={400 * (progressPercentage / 100)}
-            height="60"
-            fill="var(--color-primary-600)"
-            className="transition-all duration-500 ease-in-out"
-          >
-            <title>Progress: {progressPercentage.toFixed(1)}%</title>
-          </rect>
-
-          {/* Mastery Marker */}
-          <line
-            x1={400 * 0.8}
-            y1="0"
-            x2={400 * 0.8}
-            y2="100"
-            stroke="var(--color-gray-400)"
-            strokeDasharray="4,4"
-            strokeWidth="2"
-          >
-            <title>Mastery Level: 80%</title>
-          </line>
-        </svg>
-      </div>
-    </div>
+    </Card>
   );
 }; 

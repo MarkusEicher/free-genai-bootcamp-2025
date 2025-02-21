@@ -11,6 +11,7 @@ import { SkipLink } from '../../components/common/SkipLink';
 import { dashboardApi } from '../../api/dashboard';
 import type { DashboardData } from '../../types/dashboard';
 import { useDashboardKeyboardNav } from '../../hooks/useDashboardKeyboardNav';
+import { useCache } from '../../contexts/CacheContext';
 
 const DashboardContent: React.FC<{
   data: DashboardData;
@@ -70,6 +71,12 @@ const DashboardContent: React.FC<{
 export default function Dashboard() {
   const { data, isLoading, isError, error, refetch } = useDashboardData();
   const { currentSection, handleKeyDown } = useDashboardKeyboardNav();
+  const { invalidateCache } = useCache();
+
+  const handleRefreshAll = async () => {
+    await invalidateCache('dashboard');
+    window.location.reload(); // Refresh all components
+  };
 
   if (isLoading) {
     return (
@@ -92,18 +99,21 @@ export default function Dashboard() {
       aria-busy={isLoading}
       onKeyDown={handleKeyDown}
     >
+      <SkipLink targetId="dashboard-content">
+        Skip to dashboard content
+      </SkipLink>
+
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-50" tabIndex={-1}>
           Learning Dashboard
         </h1>
         <button
-          onClick={() => refetch()}
-          disabled={isLoading}
-          aria-label={isLoading ? "Refreshing dashboard" : "Refresh dashboard"}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={handleRefreshAll}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+          aria-label="Refresh all dashboard data"
         >
-          <RefreshIcon />
-          <span className="text-base">{isLoading ? 'Refreshing...' : 'Refresh'}</span>
+          <RefreshIcon className="h-5 w-5" />
+          <span>Refresh All</span>
         </button>
       </div>
 
