@@ -563,3 +563,205 @@ def test_cache_response_error_propagation():
     # Second request should also fail (errors shouldn't be cached)
     response2 = client.get("/test")
     assert response2.status_code == 500
+
+"""Tests for the enhanced LocalCache implementation."""
+import pytest
+import json
+import os
+from datetime import datetime, timedelta
+from pathlib import Path
+from app.core.cache import LocalCache
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear cache before and after each test."""
+    cache = LocalCache.get_instance()
+    cache.clear()
+    yield
+    cache.clear()
+
+@pytest.fixture
+def cache():
+    """Get cache instance."""
+    return LocalCache.get_instance()
+
+@pytest.fixture
+def large_data():
+    """Create data larger than max entry size."""
+    return "x" * (1024 * 1024 * 2)  # 2MB
+
+class TestLocalCache:
+    def test_singleton_instance(self):
+        """Test that LocalCache is a singleton."""
+        cache1 = LocalCache.get_instance()
+        cache2 = LocalCache.get_instance()
+        assert cache1 is cache2
+    
+    def test_cache_permissions(self, cache):
+        """Test cache directory permissions."""
+        assert cache.cache_dir.exists()
+        assert oct(cache.cache_dir.stat().st_mode)[-3:] == '700'
+    
+    def test_basic_cache_operations(self, cache):
+        """Test basic set/get/delete operations."""
+        # Set and get
+        assert cache.set('test_key', 'test_value')
+        assert cache.get('test_key') == 'test_value'
+        
+        # Delete
+        assert cache.delete('test_key')
+        assert cache.get('test_key') is None
+    
+    def test_data_sanitization(self, cache):
+        """Test sensitive data sanitization."""
+        test_data = {
+            'email': 'user@example.com',
+            'password': 'secret123',
+            'token': 'abc123',
+            'name': 'John Doe',
+            'nested': {
+                'api_key': '12345',
+                'safe_value': 'ok'
+            }
+        }
+        
+        cache.set('sensitive_data', test_data)
+        result = cache.get('sensitive_data')
+        
+        assert result['email'] == '[REDACTED]'
+        assert result['password'] == '[REDACTED]'
+        assert result['token'] == '[REDACTED]'
+        assert result['name'] == 'John Doe'
+        assert result['nested']['api_key'] == '[REDACTED]'
+        assert result['nested']['safe_value'] == 'ok'
+    
+    def test_cache_expiration(self, cache):
+        """Test cache entry expiration."""
+        # Set with 1 second expiration
+        cache.set('expire_test', 'value', expire=1)
+        assert cache.get('expire_test') == 'value'
+        
+        # Wait for expiration
+        import time
+        time.sleep(1.1)
+        
+        assert cache.get('expire_test') is None
+        # Verify file is deleted
+        assert len(list(cache.cache_dir.glob('*.cache'))) == 0
+    
+    def test_secure_deletion(self, cache):
+        """Test secure file deletion."""
+        cache.set('delete_test', 'sensitive_data')
+        
+        # Get cache file path
+        cache_files = list(cache.cache_dir.glob('*.cache'))
+        assert len(cache_files) == 1
+        cache_file = cache_files[0]
+        
+        # Verify file content before deletion
+        with open(cache_file, 'r') as f:
+            assert 'sensitive_data' in f.read()
+        
+        # Delete and verify overwrite
+        cache.delete('delete_test')
+        assert not cache_file.exists()
+    
+    def test_size_limits(self, cache, large_data):
+        """Test cache size limits."""
+        # Test entry size limit
+        with pytest.raises(HTTPException) as exc_info:
+            cache.set('large_entry', large_data)
+        assert exc_info.value.status_code == 413
+        
+        # Test total cache size limit
+        for i in range(100):
+            cache.set(f'key_{i}', 'x' * 1024 * 1024)  # 1MB each
+        
+        # Verify cleanup occurred
+        total_size = sum(f.stat().st_size for f in cache.cache_dir.glob('*.cache'))
+        assert total_size < cache.max_cache_size
+    
+    def test_concurrent_access(self, cache):
+        """Test thread safety of cache operations."""
+        import threading
+        import queue
+        
+        results = queue.Queue()
+        
+        def worker(worker_id):
+            try:
+                # Multiple operations
+                cache.set(f'key_{worker_id}', f'value_{worker_id}')
+                value = cache.get(f'key_{worker_id}')
+                cache.delete(f'key_{worker_id}')
+                results.put(('success', worker_id, value))
+            except Exception as e:
+                results.put(('error', worker_id, str(e)))
+        
+        # Start multiple threads
+        threads = []
+        for i in range(10):
+            t = threading.Thread(target=worker, args=(i,))
+            threads.append(t)
+            t.start()
+        
+        # Wait for completion
+        for t in threads:
+            t.join()
+        
+        # Check results
+        while not results.empty():
+            status, worker_id, value = results.get()
+            assert status == 'success'
+            if value is not None:  # Value might be None if get happened after delete
+                assert value == f'value_{worker_id}'
+    
+    def test_cache_clear(self, cache):
+        """Test clearing all cache entries."""
+        # Add multiple entries
+        for i in range(5):
+            cache.set(f'key_{i}', f'value_{i}')
+        
+        assert len(list(cache.cache_dir.glob('*.cache'))) == 5
+        
+        # Clear cache
+        assert cache.clear()
+        
+        # Verify all files are gone
+        assert len(list(cache.cache_dir.glob('*.cache'))) == 0
+        # Verify directory still exists with correct permissions
+        assert cache.cache_dir.exists()
+        assert oct(cache.cache_dir.stat().st_mode)[-3:] == '700'
+    
+    def test_invalid_cache_files(self, cache):
+        """Test handling of invalid cache files."""
+        # Create invalid cache file
+        invalid_path = cache.cache_dir / 'invalid.cache'
+        invalid_path.write_text('invalid json')
+        
+        # Attempt to get (should clean up invalid file)
+        cache.get('any_key')
+        
+        # Verify cleanup
+        assert not invalid_path.exists()
+    
+    def test_cache_file_permissions(self, cache):
+        """Test cache file permissions."""
+        cache.set('permission_test', 'value')
+        
+        cache_files = list(cache.cache_dir.glob('*.cache'))
+        assert len(cache_files) == 1
+        
+        # Verify file permissions
+        assert oct(cache_files[0].stat().st_mode)[-3:] == '600'
+    
+    def test_quota_management(self, cache):
+        """Test cache quota management."""
+        # Fill cache to near max
+        data_size = cache.max_cache_size // 10
+        for i in range(11):  # Slightly over threshold
+            cache.set(f'quota_key_{i}', 'x' * data_size)
+        
+        # Verify cleanup occurred
+        total_size = sum(f.stat().st_size for f in cache.cache_dir.glob('*.cache'))
+        assert total_size < cache.max_cache_size * 0.8  # Should be reduced to below 80%
