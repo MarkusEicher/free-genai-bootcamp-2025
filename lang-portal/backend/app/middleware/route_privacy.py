@@ -160,11 +160,16 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
         # Sanitize response content if needed
         if (
             rules["sanitize_response"] and
-            response.headers.get("content-type", "").startswith("application/json")
+            response.headers.get("content-type", "").startswith("application/json") and
+            hasattr(response, "body")  # Check if response has body attribute
         ):
-            response_body = response.body.decode()
-            sanitized_body = self._sanitize_response_data(response_body)
-            response.body = sanitized_body.encode()
-            response.headers["content-length"] = str(len(response.body))
+            try:
+                response_body = response.body.decode()
+                sanitized_body = self._sanitize_response_data(response_body)
+                response.body = sanitized_body.encode()
+                response.headers["content-length"] = str(len(response.body))
+            except (AttributeError, UnicodeDecodeError):
+                # Skip sanitization for streaming responses or binary data
+                pass
         
         return response 

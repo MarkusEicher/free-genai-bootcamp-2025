@@ -564,6 +564,112 @@ def test_cache_response_error_propagation():
     response2 = client.get("/test")
     assert response2.status_code == 500
 
+def test_cache_monitoring(cache):
+    """Test cache monitoring counters."""
+    # Initial counts should be zero
+    assert cache.hit_count == 0
+    assert cache.miss_count == 0
+    
+    # Test miss
+    assert cache.get('nonexistent') is None
+    assert cache.miss_count == 1
+    assert cache.hit_count == 0
+    
+    # Test hit
+    cache.set('test', 'value')
+    assert cache.get('test') == 'value'
+    assert cache.hit_count == 1
+    assert cache.miss_count == 1
+    
+    # Test expired (counts as miss)
+    cache.set('expire_test', 'value', expire=1)
+    time.sleep(1.1)
+    assert cache.get('expire_test') is None
+    assert cache.miss_count == 2
+    assert cache.hit_count == 1
+
+def test_cache_response_headers():
+    """Test cache response headers."""
+    app = FastAPI()
+    
+    @app.get("/test")
+    @cache_response(prefix="test", expire=60, monitor=True)
+    async def test_endpoint(request: Request):
+        return {"data": "test"}
+    
+    client = TestClient(app)
+    
+    # First request (miss)
+    response1 = client.get("/test")
+    assert response1.status_code == 200
+    assert response1.headers["X-Cache-Status"] == "MISS"
+    assert response1.headers["Cache-Control"] == "private, max-age=60"
+    assert "X-Cache-Expires" in response1.headers
+    assert "X-Cache-Key" in response1.headers
+    assert "X-Cache-Stats" in response1.headers
+    
+    # Parse cache stats
+    stats1 = json.loads(response1.headers["X-Cache-Stats"])
+    assert "total_size" in stats1
+    assert "entry_count" in stats1
+    assert "hit_ratio" in stats1
+    assert stats1["entry_count"] == 1
+    
+    # Second request (hit)
+    response2 = client.get("/test")
+    assert response2.status_code == 200
+    assert response2.headers["X-Cache-Status"] == "HIT"
+    
+    # Stats should show improved hit ratio
+    stats2 = json.loads(response2.headers["X-Cache-Stats"])
+    assert stats2["hit_ratio"] > stats1["hit_ratio"]
+
+def test_cache_response_error_handling():
+    """Test that errors are not cached."""
+    app = FastAPI()
+    error_count = 0
+    
+    @app.get("/test")
+    @cache_response(prefix="test")
+    async def test_endpoint(request: Request):
+        nonlocal error_count
+        error_count += 1
+        raise HTTPException(status_code=500, detail="Test error")
+    
+    client = TestClient(app)
+    
+    # First request
+    response1 = client.get("/test")
+    assert response1.status_code == 500
+    
+    # Second request should not hit cache
+    response2 = client.get("/test")
+    assert response2.status_code == 500
+    assert error_count == 2  # Error was not cached
+
+def test_cache_response_language_params():
+    """Test caching with language-specific parameters."""
+    app = FastAPI()
+    
+    @app.get("/test")
+    @cache_response(prefix="test", include_query_params=True)
+    async def test_endpoint(request: Request, lang: str = "en"):
+        return {"language": lang}
+    
+    client = TestClient(app)
+    
+    # Test different languages
+    response_en = client.get("/test?lang=en")
+    response_es = client.get("/test?lang=es")
+    
+    assert response_en.json() != response_es.json()
+    assert response_en.json()["language"] == "en"
+    assert response_es.json()["language"] == "es"
+    
+    # Verify cache hit for same language
+    response_en2 = client.get("/test?lang=en")
+    assert response_en2.headers["X-Cache-Status"] == "HIT"
+
 """Tests for the enhanced LocalCache implementation."""
 import pytest
 import json

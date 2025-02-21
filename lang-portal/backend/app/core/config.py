@@ -6,6 +6,9 @@ class Settings(BaseModel):
     # Get the backend directory path
     BACKEND_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
+    # Development mode
+    DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() == "true"
+    
     # Database URLs with explicit paths in backend directory
     DATABASE_URL: str = f"sqlite:///{BACKEND_DIR}/data/app.db"
     TEST_DATABASE_URL: str = f"sqlite:///{BACKEND_DIR}/data/test.db"

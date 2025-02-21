@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html, get_openapi
 from app.api.v1.api import api_router
 from app.middleware.security import SecurityMiddleware
 from app.middleware.privacy import PrivacyMiddleware
@@ -57,12 +57,33 @@ if DEV_MODE:
 
     @app.get("/docs", include_in_schema=False)
     async def custom_swagger_ui_html():
+        """Serve custom Swagger UI in development mode."""
         return get_swagger_ui_html(
             openapi_url="/openapi.json",
-            title=app.title + " - Swagger UI",
-            swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
-            swagger_css_url="/static/swagger-ui/swagger-ui.css",
-            swagger_favicon_url="/static/swagger-ui/favicon.png"
+            title=app.title + " - API Documentation",
+            swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js",
+            swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css",
+        )
+
+    @app.get("/redoc", include_in_schema=False)
+    async def redoc_html():
+        """Serve ReDoc in development mode."""
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title=app.title + " - API Documentation",
+            redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js",
+        )
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def get_openapi_endpoint():
+        """Serve OpenAPI schema in development mode."""
+        return JSONResponse(
+            content=get_openapi(
+                title=app.title,
+                version=app.version,
+                description=app.description,
+                routes=app.routes,
+            )
         )
 
 # Add middleware in order of execution
@@ -125,10 +146,16 @@ async def health_check():
     }
 )
 async def root():
-    return {
-        "message": "Welcome to the Language Learning Portal API",
-        "mode": "development" if DEV_MODE else "production"
-    }
+    return JSONResponse(
+        content={
+            "message": "Welcome to the Language Learning Portal API",
+            "mode": "development" if DEV_MODE else "production"
+        },
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
 
 # Redirect common paths to their API v1 equivalents
 @app.get("/vocabulary")

@@ -10,6 +10,8 @@ from app.core.config import settings
 import shutil
 import secrets
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
+import time
 
 class LocalCache:
     """Local file-based cache implementation that respects privacy."""
@@ -34,6 +36,9 @@ class LocalCache:
             "email", "password", "token", "secret",
             "api_key", "session", "auth", "key"
         }
+        
+        self.hit_count = 0
+        self.miss_count = 0
     
     @classmethod
     def get_instance(cls) -> 'LocalCache':
@@ -131,12 +136,13 @@ class LocalCache:
             total_size -= size
     
     def get(self, key: str) -> Optional[Any]:
-        """Get cached value with privacy checks."""
+        """Get cached value with privacy checks and monitoring."""
         cache_path = self._get_cache_path(key)
         
         with self._cache_lock:
             try:
                 if not cache_path.exists():
+                    self.miss_count += 1
                     return None
                 
                 with open(cache_path, 'r') as f:
@@ -146,13 +152,16 @@ class LocalCache:
                 expire_time = datetime.fromisoformat(cache_data['expire_time'])
                 if expire_time <= datetime.now():
                     self._secure_delete(cache_path)
+                    self.miss_count += 1
                     return None
                 
+                self.hit_count += 1
                 return self._sanitize_data(cache_data['value'])
                 
             except (json.JSONDecodeError, KeyError, ValueError, OSError):
                 if cache_path.exists():
                     self._secure_delete(cache_path)
+                self.miss_count += 1
                 return None
     
     def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
@@ -234,73 +243,92 @@ cache = LocalCache.get_instance()
 def cache_response(
     prefix: str,
     expire: Optional[int] = 300,
-    include_query_params: bool = False
+    include_query_params: bool = False,
+    monitor: bool = True
 ):
     """
     Cache decorator for FastAPI endpoint responses.
-    Implements privacy-first caching with minimal data collection.
+    Implements privacy-first caching with frontend integration support.
+    
+    Args:
+        prefix: Cache key prefix
+        expire: Cache expiration time in seconds
+        include_query_params: Whether to include safe query params in cache key
+        monitor: Whether to collect cache statistics
     """
     def decorator(func):
         async def wrapper(*args, **kwargs):
+            cache_instance = LocalCache.get_instance()
+            request = next((arg for arg in args if isinstance(arg, Request)), None)
+            
             # Build cache key
             key_parts = [prefix]
             
-            # Add path without any identifying information
-            if args and hasattr(args[0], "url"):
-                # Remove any potential user identifiers from path
-                clean_path = re.sub(r"/(?:user|profile|account)/\d+", "/[REDACTED]", args[0].url.path)
+            if request:
+                # Clean path and add to key parts
+                clean_path = re.sub(r"/(?:user|profile|account)/\d+", "/[REDACTED]", request.url.path)
                 key_parts.append(clean_path)
-            
-            # Include non-identifying query params if specified
-            if include_query_params and args and hasattr(args[0], "query_params"):
-                # Strict whitelist of allowed parameters
-                safe_params = {
-                    k: v for k, v in args[0].query_params.items()
-                    if k in {"limit", "offset", "sort", "order", "filter"}
-                    and not any(re.search(pattern, str(v)) for pattern in cache.sensitive_patterns)
-                }
-                if safe_params:
-                    key_parts.append(str(sorted(safe_params.items())))
+                
+                # Include safe query params if specified
+                if include_query_params:
+                    safe_params = {
+                        k: v for k, v in request.query_params.items()
+                        if k in {"limit", "offset", "sort", "order", "filter", "lang", "level"}
+                        and not any(re.search(pattern, str(v)) for pattern in cache_instance.sensitive_patterns)
+                    }
+                    if safe_params:
+                        key_parts.append(str(sorted(safe_params.items())))
             
             cache_key = ":".join(key_parts)
             
             # Try to get from cache
-            cached_response = cache.get(cache_key)
+            cached_response = cache_instance.get(cache_key)
             cache_hit = cached_response is not None
             
+            # Get response
             if cache_hit:
                 response = cached_response
             else:
                 try:
-                    # Get fresh response
                     response = await func(*args, **kwargs)
-                    # Cache the response
-                    cache.set(cache_key, response, expire)
+                    # Don't cache error responses
+                    if not isinstance(response, HTTPException):
+                        cache_instance.set(cache_key, response, expire)
                 except Exception as e:
-                    # Don't cache errors
                     raise e
             
-            # Add cache-related headers if we have a request object
-            if args and hasattr(args[0], "headers"):
-                request = args[0]
-                headers = {
-                    "X-Cache-Status": "HIT" if cache_hit else "MISS",
-                    "Cache-Control": "no-store, no-cache",
-                    "X-Cache-Expires": str(expire),
-                }
-                
-                # Add headers to response
-                if hasattr(response, "headers"):
-                    response.headers.update(headers)
-                else:
-                    # Convert dict response to Response object
-                    from fastapi.responses import JSONResponse
-                    response = JSONResponse(
-                        content=response,
-                        headers=headers
-                    )
+            # Prepare cache headers
+            cache_headers = {
+                "X-Cache-Status": "HIT" if cache_hit else "MISS",
+                "Cache-Control": f"private, max-age={expire}",
+                "X-Cache-Expires": str(int(time.time()) + expire),
+                "X-Cache-Key": cache_key
+            }
             
-            return response
+            # Add monitoring headers if enabled
+            if monitor:
+                cache_stats = {
+                    "total_size": sum(f.stat().st_size for f in cache_instance.cache_dir.glob("*.cache")),
+                    "entry_count": len(list(cache_instance.cache_dir.glob("*.cache"))),
+                    "hit_ratio": len(cache_instance._get_all_keys()) / (cache_instance.hit_count + cache_instance.miss_count) if (cache_instance.hit_count + cache_instance.miss_count) > 0 else 0
+                }
+                cache_headers["X-Cache-Stats"] = json.dumps(cache_stats)
+            
+            # Return response with headers
+            if isinstance(response, (dict, list)):
+                return JSONResponse(
+                    content=response,
+                    headers=cache_headers
+                )
+            elif hasattr(response, "headers"):
+                response.headers.update(cache_headers)
+                return response
+            else:
+                return JSONResponse(
+                    content={"data": response},
+                    headers=cache_headers
+                )
+        
         return wrapper
     return decorator
 
