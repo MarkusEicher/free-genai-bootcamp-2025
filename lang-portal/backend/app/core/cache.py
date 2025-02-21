@@ -9,9 +9,95 @@ from pathlib import Path
 from app.core.config import settings
 import shutil
 import secrets
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 import time
+
+class CacheMetrics:
+    """Metrics collection for cache monitoring."""
+    
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.hit_count = 0
+        self.miss_count = 0
+        self.total_size = 0
+        self.entry_count = 0
+        self.cleanup_count = 0
+        self.privacy_violations = 0
+        self.sanitization_count = 0
+        self.last_cleanup = None
+        self._response_times = []
+        self._max_response_times = 1000  # Keep last 1000 response times
+
+    def record_hit(self, response_time_ms: float):
+        with self._lock:
+            self.hit_count += 1
+            self._record_response_time(response_time_ms)
+
+    def record_miss(self, response_time_ms: float):
+        with self._lock:
+            self.miss_count += 1
+            self._record_response_time(response_time_ms)
+
+    def record_cleanup(self, cleaned_entries: int, cleaned_size: int):
+        with self._lock:
+            self.cleanup_count += 1
+            self.entry_count -= cleaned_entries
+            self.total_size -= cleaned_size
+            self.last_cleanup = datetime.utcnow()
+
+    def record_privacy_violation(self):
+        with self._lock:
+            self.privacy_violations += 1
+
+    def record_sanitization(self):
+        with self._lock:
+            self.sanitization_count += 1
+
+    def _record_response_time(self, response_time_ms: float):
+        self._response_times.append(response_time_ms)
+        if len(self._response_times) > self._max_response_times:
+            self._response_times.pop(0)
+
+    @property
+    def hit_ratio(self) -> float:
+        total = self.hit_count + self.miss_count
+        return self.hit_count / total if total > 0 else 0.0
+
+    @property
+    def storage_utilization(self) -> float:
+        return self.total_size / settings.MAX_CACHE_SIZE
+
+    def get_response_times(self) -> Dict[str, float]:
+        if not self._response_times:
+            return {"avg": 0, "min": 0, "max": 0}
+        return {
+            "avg": sum(self._response_times) / len(self._response_times),
+            "min": min(self._response_times),
+            "max": max(self._response_times)
+        }
+
+    def get_sanitization_rate(self) -> float:
+        return (self.sanitization_count / 
+                (self.hit_count + self.miss_count) if 
+                (self.hit_count + self.miss_count) > 0 else 0.0)
+
+    def to_dict(self) -> Dict:
+        return {
+            "performance": {
+                "hit_ratio": self.hit_ratio,
+                "response_times": self.get_response_times(),
+                "entry_count": self.entry_count
+            },
+            "privacy": {
+                "sanitization_rate": self.get_sanitization_rate(),
+                "violations": self.privacy_violations
+            },
+            "storage": {
+                "total_size": self.total_size,
+                "utilization": self.storage_utilization
+            }
+        }
 
 class LocalCache:
     """Local file-based cache implementation that respects privacy."""
@@ -46,6 +132,7 @@ class LocalCache:
         
         self.hit_count = 0
         self.miss_count = 0
+        self.metrics = CacheMetrics()
     
     @classmethod
     def get_instance(cls) -> 'LocalCache':
@@ -174,32 +261,35 @@ class LocalCache:
     
     def get(self, key: str) -> Optional[Any]:
         """Get cached value with privacy checks and monitoring."""
-        cache_path = self._get_cache_path(key)
-        
-        with self._cache_lock:
-            try:
-                if not cache_path.exists():
-                    self.miss_count += 1
-                    return None
-                
-                with open(cache_path, 'r') as f:
-                    cache_data = json.load(f)
-                
-                # Check expiration
-                expire_time = datetime.fromisoformat(cache_data['expire_time'])
-                if expire_time <= datetime.now():
-                    self._secure_delete(cache_path)
-                    self.miss_count += 1
-                    return None
-                
-                self.hit_count += 1
-                return self._sanitize_data(cache_data['value'])
-                
-            except (json.JSONDecodeError, KeyError, ValueError, OSError):
-                if cache_path.exists():
-                    self._secure_delete(cache_path)
-                self.miss_count += 1
+        start_time = datetime.utcnow()
+        try:
+            cache_path = self._get_cache_path(key)
+            if not cache_path.exists():
+                response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                self.metrics.record_miss(response_time)
                 return None
+                
+            with open(cache_path, 'r') as f:
+                cache_data = json.load(f)
+            
+            # Check expiration
+            expire_time = datetime.fromisoformat(cache_data['expire_time'])
+            if expire_time <= datetime.now():
+                self._secure_delete(cache_path)
+                response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+                self.metrics.record_miss(response_time)
+                return None
+            
+            response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            self.metrics.record_hit(response_time)
+            return self._sanitize_data(cache_data['value'])
+                
+        except (json.JSONDecodeError, KeyError, ValueError, OSError):
+            if cache_path.exists():
+                self._secure_delete(cache_path)
+            response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            self.metrics.record_miss(response_time)
+            return None
     
     def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
         """Set cache value with privacy protections."""
@@ -230,8 +320,11 @@ class LocalCache:
                     json.dump(cache_data, f)
                 os.chmod(cache_path, 0o600)
                 
+                self.metrics.entry_count += 1
+                self.metrics.total_size += cache_path.stat().st_size
                 return True
             except (IOError, OSError):
+                self.metrics.record_privacy_violation()
                 return False
     
     def delete(self, key: str) -> bool:

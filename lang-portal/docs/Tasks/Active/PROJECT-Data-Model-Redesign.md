@@ -502,6 +502,12 @@ GET /api/v1/progress?userId={userId}
 
    Created document --> docs/Temp/FRONTEND-CACHE-INTEGRATION-21-02-2025-10-43.md
    ```
+   ``` 
+   ADMIN-EDIT 21-02-2025-13-11: 
+   Backend team worked on the activity system core. They created the following document:
+   docs/Tasks/Active/PROJECT-CACHE-MONITORING-AND-TESTING-21-02-2025-13-11.md
+   The backend team is now implementing the ### Backend Tasks under the section ### 3. Implementation Tasks
+   ```
 
 2. **Session Management**
    ```mermaid
