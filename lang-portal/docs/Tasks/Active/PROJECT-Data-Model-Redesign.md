@@ -494,6 +494,15 @@ GET /api/v1/progress?userId={userId}
    - Add API endpoints with proper documentation
    - Implement caching with local storage
 
+   ```
+   ADMIN-EDIT 21-02-2025-10-43: 
+   Gave the following instructions to the backend team:
+   
+   Please formulate a request for the frontend team with all necessary information to implement this cache feature. Then wait till we come back to continue with  the backend tasks. Include all the points you mentione in your request to the frontend team.
+
+   Created document --> docs/Temp/FRONTEND-CACHE-INTEGRATION-21-02-2025-10-43.md
+   ```
+
 2. **Session Management**
    ```mermaid
    graph TD
