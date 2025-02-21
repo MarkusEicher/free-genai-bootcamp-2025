@@ -24,30 +24,39 @@ export const dashboardApi = {
   // Core dashboard endpoints
   getDashboardStats: async (): Promise<DashboardStats> => {
     try {
-      return await fetchApi<DashboardStats>(API_ENDPOINTS.DASHBOARD.STATS);
+      const response = await fetchApi<DashboardStats>(API_ENDPOINTS.DASHBOARD.STATS);
+      return response.data;
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
-      return defaultStats;
+      if (error instanceof ApiError && error.status === 404) {
+        return defaultStats;
+      }
+      throw error;
     }
   },
 
   getDashboardProgress: async (): Promise<DashboardProgress> => {
     try {
-      return await fetchApi<DashboardProgress>(API_ENDPOINTS.DASHBOARD.PROGRESS);
+      const response = await fetchApi<DashboardProgress>(API_ENDPOINTS.DASHBOARD.PROGRESS);
+      return response.data;
     } catch (error) {
-      console.error('Failed to fetch dashboard progress:', error);
-      return defaultProgress;
+      if (error instanceof ApiError && error.status === 404) {
+        return defaultProgress;
+      }
+      throw error;
     }
   },
 
   getLatestSessions: async (limit: number = 5): Promise<LatestSession[]> => {
     try {
-      return await fetchApi<LatestSession[]>(API_ENDPOINTS.DASHBOARD.LATEST_SESSIONS, {
+      const response = await fetchApi<LatestSession[]>(API_ENDPOINTS.DASHBOARD.LATEST_SESSIONS, {
         params: { limit }
       });
+      return response.data;
     } catch (error) {
-      console.error('Failed to fetch latest sessions:', error);
-      return [];
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
     }
   },
 

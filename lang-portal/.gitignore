@@ -76,3 +76,5 @@ backend/data/
 # Logs
 backend/logs/*
 !backend/logs/.gitkeep
+
+# Transfer logs
