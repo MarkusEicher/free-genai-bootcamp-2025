@@ -1,277 +1,201 @@
-# Privacy Guidelines and Implementation
+# Privacy Architecture Documentation
 
-## Core Privacy Principles
+## Overview
 
-1. **Local-Only Operation**
-   - Application runs exclusively on localhost
-   - No external connections or third-party services
-   - All data stored locally in the backend directory
+The Language Learning Portal is designed with privacy-by-design principles, ensuring data protection and user privacy at every level of the application. This document outlines the privacy features, implementation details, and best practices.
 
-2. **Data Minimization**
-   - Collect only essential data for functionality
-   - No tracking, analytics, or telemetry
-   - No user identification or session persistence
-   - Automatic data expiration and secure deletion
+## Core Privacy Features
 
-3. **Privacy by Design**
-   - Privacy controls integrated into core components
-   - Secure defaults for all features
-   - Proactive data sanitization
-   - Secure data deletion with overwriting
+### 1. Local-Only Access
+- Application runs exclusively on localhost
+- External connections are blocked by multiple layers:
+  - Nginx configuration
+  - Privacy middleware
+  - Frontend API configuration
+
+### 2. Data Protection
+
+#### Request/Response Privacy
+- Sensitive parameter filtering
+- Response data sanitization
+- Privacy-focused headers
+- No tracking or analytics
+- No cookies or session data
+
+#### Cache Privacy
+- Local file-based caching only
+- Secure cache file deletion
+- Data sanitization in cache
+- Expiration handling
+- No persistent identifiers
+
+#### Logging Privacy
+- Privacy-focused formatter
+- Secure log rotation
+- Data sanitization in logs
+- Minimal logging in production
+- No sensitive data logging
+
+### 3. Route-Specific Privacy Rules
+
+#### Dashboard Routes
+```python
+{
+    "cache_control": "no-store, max-age=0",
+    "sanitize_response": True,
+    "allow_query_params": {"limit", "offset"}
+}
+```
+
+#### Vocabulary Routes
+```python
+{
+    "cache_control": "private, max-age=300",
+    "sanitize_response": True,
+    "allow_query_params": {"limit", "offset", "sort", "filter"}
+}
+```
+
+#### Session Routes
+```python
+{
+    "cache_control": "no-store, no-cache, must-revalidate",
+    "sanitize_response": True,
+    "allow_query_params": {"limit"}
+}
+```
+
+### 4. Security Headers
+
+All responses include:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- Comprehensive `Permissions-Policy`
+- `X-Privacy-Mode: strict` (or `development` in dev mode)
 
 ## Implementation Details
 
-### 1. Cache System (`app/core/cache.py`)
+### Privacy Middleware Chain
 
-The cache system implements privacy-focused features:
+1. **Global Privacy Middleware** (`PrivacyMiddleware`)
+   - Enforces local-only access
+   - Filters sensitive parameters
+   - Adds base privacy headers
 
-```python
-class LocalCache:
-    def _sanitize_data(self, data: Any) -> Any:
-        """Sanitizes sensitive data before storage/retrieval"""
-        # Sanitization patterns for various data types
-        # Secure deletion with overwriting
-        # Automatic expiration handling
-```
+2. **Route Privacy Middleware** (`RoutePrivacyMiddleware`)
+   - Applies route-specific rules
+   - Sanitizes responses
+   - Manages cache controls
 
-Key Features:
-- Secure file-based caching with data sanitization
-- SHA-256 hashing for cache keys
-- Atomic file operations
-- Secure deletion with zero-overwrite
-- Automatic expiration handling
-- Query parameter filtering
+3. **Security Middleware** (`SecurityMiddleware`)
+   - Adds security headers
+   - Enforces CSP
+   - Blocks unwanted features
 
-### 2. Logging System (`app/core/logging.py`)
-
-Privacy-focused logging implementation:
+### Data Sanitization Patterns
 
 ```python
-class PrivacyFormatter:
-    """Sanitizes sensitive information in log messages"""
-    sensitive_patterns = [
-        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]'),
-        (r'\b(?:\d{1,3}\.){3}\d{1,3}\b', '[IP]'),
-        # Additional patterns...
-    ]
-```
-
-Features:
-- Automatic sanitization of sensitive data
-- Secure log rotation
-- Development/production mode differences
-- Limited log retention
-- Secure file cleanup
-
-### 3. Security Headers
-
-All responses include privacy-enhancing headers:
-
-```python
-response.headers.update({
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "X-XSS-Protection": "1; mode=block",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "interest-cohort=()",
-    "Content-Security-Policy": "default-src 'self'"
-})
+sensitive_patterns = [
+    (r'"id":\s*\d+', '"id": "[ID]"'),
+    (r'"created_at":\s*"[^"]*"', '"created_at": "[TIMESTAMP]"'),
+    (r'"updated_at":\s*"[^"]*"', '"updated_at": "[TIMESTAMP]"'),
+    (r'"ip":\s*"[^"]*"', '"ip": "[REDACTED]"'),
+    (r'"user_agent":\s*"[^"]*"', '"user_agent": "[REDACTED]"'),
+    (r'"session_id":\s*"[^"]*"', '"session_id": "[REDACTED]"'),
+    (r'"token":\s*"[^"]*"', '"token": "[REDACTED]"')
+]
 ```
 
 ## Development Guidelines
 
-### 1. Data Storage
+### 1. API Endpoints
+- Use route-specific privacy rules
+- Implement proper data sanitization
+- Follow the principle of least privilege
+- Document privacy requirements
 
-- Use only local SQLite database
-- No external databases or services
-- Implement automatic data cleanup
-- Use secure deletion for all data removal
+### 2. Frontend Development
+- Use the provided `fetchApi` wrapper
+- Implement client-side data sanitization
+- Avoid storing sensitive data
+- Use privacy-focused components
 
-### 2. API Development
+### 3. Testing
+- Include privacy-focused test cases
+- Verify data sanitization
+- Check header presence
+- Test privacy rules
 
-- Sanitize all input and output
-- No user tracking or identification
-- Minimal query parameters
-- Cache only non-sensitive data
-- Implement rate limiting locally
+### 4. Cache Management
+- Use appropriate cache durations
+- Implement secure deletion
+- Sanitize cached data
+- Handle expiration properly
 
-### 3. Frontend Development
+## Production Deployment
 
-- No external resources (fonts, CDNs, etc.)
-- No cookies or local storage
-- No analytics or tracking scripts
-- Local-only API requests
-- Privacy-preserving error handling
+### 1. Environment Setup
+- Set `DEV_MODE=false`
+- Configure proper file permissions
+- Set up secure log rotation
+- Enable privacy monitoring
 
-### 4. Testing
+### 2. Monitoring
+- Check privacy header presence
+- Monitor cache usage
+- Review log sanitization
+- Track privacy violations
 
-Run privacy-focused tests:
+### 3. Maintenance
+- Regular privacy audits
+- Update security headers
+- Review cache policies
+- Update sanitization patterns
+
+## Privacy Compliance
+
+The application is designed to comply with:
+- GDPR principles
+- Data minimization
+- Purpose limitation
+- Storage limitation
+- Data protection by design
+
+## Best Practices
+
+1. **Data Collection**
+   - Collect only necessary data
+   - Implement data minimization
+   - Use privacy-preserving alternatives
+
+2. **Data Storage**
+   - Use local storage only
+   - Implement secure deletion
+   - Handle data expiration
+
+3. **Data Access**
+   - Enforce local-only access
+   - Implement proper authentication
+   - Use role-based access control
+
+4. **Data Protection**
+   - Sanitize sensitive data
+   - Use secure communication
+   - Implement proper encryption
+
+## Testing Privacy Features
+
+Run the comprehensive test suite:
 ```bash
+python -m pytest tests/middleware/test_privacy.py
+python -m pytest tests/middleware/test_route_privacy.py
 python -m pytest tests/core/test_privacy.py
 ```
 
-Key test areas:
-- Data sanitization
-- Secure deletion
-- Cache privacy
-- Log privacy
-- Header validation
+## References
 
-## Privacy Checklist
-
-Before implementing new features:
-
-- [ ] Verify local-only operation
-- [ ] Check data minimization
-- [ ] Implement data sanitization
-- [ ] Add secure deletion
-- [ ] Update privacy tests
-- [ ] Verify no external dependencies
-- [ ] Check header security
-- [ ] Review log output
-- [ ] Test cache privacy
-- [ ] Document privacy aspects
-
-## Sensitive Data Patterns
-
-The application automatically sanitizes the following patterns:
-
-1. **Personal Information**
-   - Email addresses
-   - IP addresses
-   - User IDs
-   - Session identifiers
-
-2. **Security Data**
-   - API tokens
-   - Passwords
-   - Secret keys
-   - Authentication data
-
-3. **System Information**
-   - File paths
-   - Database identifiers
-   - Server details
-   - Error messages
-
-## Configuration
-
-Privacy settings in `app/core/config.py`:
-
-```python
-class Settings(BaseModel):
-    COLLECT_METRICS: bool = False
-    ENABLE_LOGGING: bool = False
-    LOG_LEVEL: str = "ERROR"
-```
-
-## Compliance
-
-The application is designed to meet:
-
-1. **GDPR Requirements**
-   - No personal data collection
-   - No data sharing
-   - Local-only processing
-   - Automatic data cleanup
-
-2. **Privacy Best Practices**
-   - Data minimization
-   - Privacy by design
-   - Secure by default
-   - Transparent operation
-
-## Error Handling
-
-Privacy-preserving error responses:
-
-```python
-{
-    "error": "Request error",
-    "message": "Invalid input",  # Generic messages only
-    "code": "INPUT_ERROR"       # Standardized error codes
-}
-```
-
-## Logging Guidelines
-
-1. **Do Not Log**
-   - Personal information
-   - Authentication data
-   - Full URLs with parameters
-   - Stack traces in production
-   - System information
-
-2. **Safe to Log**
-   - Error codes
-   - API endpoint paths (sanitized)
-   - Performance metrics (aggregated)
-   - Application status
-
-## Cache Guidelines
-
-1. **Do Not Cache**
-   - User-specific data
-   - Authentication information
-   - Personal preferences
-   - Session data
-
-2. **Safe to Cache**
-   - Public reference data
-   - Aggregated statistics
-   - System configurations
-   - Static resources
-
-## Security Integration
-
-Privacy features work alongside security measures:
-
-1. **Authentication**
-   - Local-only verification
-   - No persistent sessions
-   - Minimal token usage
-
-2. **Authorization**
-   - Role-based access
-   - Minimal permissions
-   - No external validation
-
-## Maintenance
-
-Regular privacy maintenance:
-
-1. **Log Rotation**
-   - Automatic cleanup
-   - Secure deletion
-   - Size limits
-   - Retention periods
-
-2. **Cache Cleanup**
-   - Expiration handling
-   - Secure deletion
-   - Size monitoring
-   - Regular validation
-
-## Development Mode
-
-Additional features in development:
-
-```python
-if settings.DEV_MODE:
-    # Enhanced logging
-    # Debug information
-    # Performance metrics
-    # Test data
-```
-
-## Production Mode
-
-Strict privacy in production:
-
-```python
-if not settings.DEV_MODE:
-    # Minimal logging
-    # No debug info
-    # Sanitized errors
-    # Strict validation
-``` 
+- [FastAPI Security Documentation](https://fastapi.tiangolo.com/advanced/security/)
+- [OWASP Security Headers](https://owasp.org/www-project-secure-headers/)
+- [GDPR Compliance](https://gdpr.eu/) 

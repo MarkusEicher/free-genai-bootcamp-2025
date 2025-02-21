@@ -44,7 +44,15 @@ markers = [
     "security: Tests for security features",
     "integration: Integration tests",
     "cache: Tests for caching functionality",
-    "api: Tests for API endpoints"
+    "api: Tests for API endpoints",
+    "headers: Tests for security headers",
+    "sanitization: Tests for data sanitization",
+    "local_only: Tests for local-only access",
+    "data_protection: Tests for data protection features",
+    "cache_privacy: Tests for cache privacy features",
+    "log_privacy: Tests for logging privacy features",
+    "route_privacy: Tests for route-specific privacy",
+    "sensitive_data: Tests for sensitive data handling"
 ]
 
 # Test configuration
@@ -63,7 +71,8 @@ env = [
     "CACHE_DIR=./data/test_cache",
     "LOG_LEVEL=ERROR",
     "COLLECT_METRICS=0",
-    "ENABLE_LOGGING=0"
+    "ENABLE_LOGGING=0",
+    "DEV_MODE=false"
 ]
 
 # Warning filters
@@ -99,5 +108,41 @@ norecursedirs = [
     "__pycache__",
     ".pytest_cache",
     "htmlcov"
+]
+
+# Privacy test configuration
+[tool.pytest.privacy_settings]
+sensitive_data_patterns = [
+    "email",
+    "ip_address",
+    "jwt_token",
+    "timestamp",
+    "numeric_id",
+    "session_id",
+    "user_agent"
+]
+
+required_security_headers = [
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "X-XSS-Protection",
+    "Referrer-Policy",
+    "Permissions-Policy"
+]
+
+forbidden_headers = [
+    "Set-Cookie",
+    "Cookie",
+    "X-Analytics",
+    "X-Tracking",
+    "X-Real-IP",
+    "X-Forwarded-For"
+]
+
+route_types = [
+    "dashboard",
+    "vocabulary",
+    "sessions",
+    "activities"
 ]
 
