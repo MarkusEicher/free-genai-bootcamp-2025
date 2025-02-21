@@ -6,7 +6,7 @@ import asyncio
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException
 from app.core.file_handler import SecureFileHandler
 
 @pytest.fixture
@@ -41,6 +41,39 @@ def test_upload_file(test_image):
 def file_handler(tmp_path):
     """Create a SecureFileHandler instance."""
     return SecureFileHandler(tmp_path / "uploads")
+
+@pytest.fixture
+def test_audio():
+    """Create a test audio file."""
+    # Create a simple WAV file with 1 second of silence
+    audio_data = bytes([
+        # WAV header
+        0x52, 0x49, 0x46, 0x46,  # "RIFF"
+        0x24, 0x00, 0x00, 0x00,  # Chunk size
+        0x57, 0x41, 0x56, 0x45,  # "WAVE"
+        # Format chunk
+        0x66, 0x6D, 0x74, 0x20,  # "fmt "
+        0x10, 0x00, 0x00, 0x00,  # Chunk size
+        0x01, 0x00,              # Audio format (PCM)
+        0x01, 0x00,              # Num channels (1)
+        0x44, 0xAC, 0x00, 0x00,  # Sample rate (44100)
+        0x44, 0xAC, 0x00, 0x00,  # Byte rate
+        0x01, 0x00,              # Block align
+        0x08, 0x00,              # Bits per sample
+        # Data chunk
+        0x64, 0x61, 0x74, 0x61,  # "data"
+        0x00, 0x00, 0x00, 0x00   # Chunk size
+    ])
+    return io.BytesIO(audio_data)
+
+@pytest.fixture
+def test_audio_file(test_audio):
+    """Create a FastAPI UploadFile object for audio."""
+    return UploadFile(
+        filename="test.wav",
+        file=test_audio,
+        content_type="audio/wav"
+    )
 
 class TestFilePrivacy:
     @pytest.mark.asyncio
@@ -201,3 +234,96 @@ class TestFilePrivacy:
                 test_upload_file,
                 subdirectory="../invalid_subdir"
             ) 
+
+    @pytest.mark.asyncio
+    async def test_audio_file_handling(self, file_handler, test_audio_file):
+        """Test that audio files are handled correctly."""
+        # Test valid audio extensions
+        for ext in ['.mp3', '.wav', '.ogg', '.m4a']:
+            test_audio_file.filename = f"test{ext}"
+            saved_path = await file_handler.save_file(test_audio_file)
+            assert saved_path.exists()
+            assert saved_path.suffix.lower() == ext
+
+    @pytest.mark.asyncio
+    async def test_file_size_limit(self, file_handler, test_upload_file):
+        """Test that files exceeding size limit are rejected."""
+        # Create a large file
+        large_data = b'0' * (file_handler.MAX_FILE_SIZE + 1)
+        test_upload_file.file = io.BytesIO(large_data)
+        
+        with pytest.raises(HTTPException) as exc_info:
+            await file_handler.save_file(test_upload_file)
+        
+        assert exc_info.value.status_code == 413
+        assert "File size exceeds limit" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_storage_quota(self, file_handler, test_upload_file):
+        """Test storage quota enforcement."""
+        # Fill up storage to near quota
+        large_data = b'0' * (file_handler.STORAGE_QUOTA - 1024)  # Leave 1KB free
+        test_upload_file.file = io.BytesIO(large_data)
+        saved_path = await file_handler.save_file(test_upload_file)
+        
+        # Try to save another file that would exceed quota
+        test_upload_file.file = io.BytesIO(b'0' * 2048)  # 2KB file
+        with pytest.raises(HTTPException) as exc_info:
+            await file_handler.save_file(test_upload_file)
+        
+        assert exc_info.value.status_code == 413
+        assert "Storage quota" in str(exc_info.value.detail)
+        
+        # Clean up
+        file_handler.secure_delete(saved_path)
+
+    def test_quota_info(self, file_handler, test_upload_file):
+        """Test quota information reporting."""
+        quota_info = file_handler.get_quota_info()
+        
+        assert quota_info["total_bytes"] == file_handler.STORAGE_QUOTA
+        assert quota_info["used_bytes"] == 0
+        assert quota_info["available_bytes"] == file_handler.STORAGE_QUOTA
+        assert quota_info["used_percentage"] == 0
+
+    @pytest.mark.asyncio
+    async def test_quota_calculation(self, file_handler, test_upload_file):
+        """Test that quota calculation is accurate."""
+        # Save multiple files
+        files = []
+        file_size = 1024  # 1KB
+        num_files = 5
+        
+        for i in range(num_files):
+            test_upload_file.file = io.BytesIO(b'0' * file_size)
+            saved_path = await file_handler.save_file(test_upload_file)
+            files.append(saved_path)
+        
+        # Check quota info
+        quota_info = file_handler.get_quota_info()
+        assert quota_info["used_bytes"] == file_size * num_files
+        assert quota_info["available_bytes"] == file_handler.STORAGE_QUOTA - (file_size * num_files)
+        assert quota_info["used_percentage"] == (file_size * num_files / file_handler.STORAGE_QUOTA) * 100
+        
+        # Clean up
+        for path in files:
+            file_handler.secure_delete(path)
+
+    @pytest.mark.asyncio
+    async def test_quota_after_deletion(self, file_handler, test_upload_file):
+        """Test that quota is updated after file deletion."""
+        # Save a file
+        test_upload_file.file = io.BytesIO(b'0' * 1024)
+        saved_path = await file_handler.save_file(test_upload_file)
+        
+        # Check initial quota
+        initial_quota = file_handler.get_quota_info()
+        assert initial_quota["used_bytes"] == 1024
+        
+        # Delete the file
+        file_handler.secure_delete(saved_path)
+        
+        # Check updated quota
+        final_quota = file_handler.get_quota_info()
+        assert final_quota["used_bytes"] == 0
+        assert final_quota["used_percentage"] == 0 
