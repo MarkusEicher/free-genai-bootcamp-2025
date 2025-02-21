@@ -27,9 +27,7 @@ router = APIRouter()
     summary="Create Activity",
     description="""
     Create a new activity with vocabulary groups.
-    
-    The activity must be associated with at least one vocabulary group.
-    Practice direction can be either 'forward' or 'reverse'.
+    The activity will be cached for improved performance.
     """,
     responses={
         200: {
@@ -79,10 +77,11 @@ router = APIRouter()
         }
     }
 )
-def create_activity(
+async def create_activity(
     activity: ActivityCreate,
     db: Session = Depends(get_db)
 ):
+    """Create activity with cache support."""
     # Validate vocabulary groups
     if not activity.vocabulary_group_ids:
         raise HTTPException(
@@ -98,19 +97,30 @@ def create_activity(
     "/activities",
     response_model=List[ActivityResponse],
     summary="List Activities",
-    description="Get a list of all activities."
+    description="Get a list of all activities with cache support."
 )
-@cache_response(prefix="activity:list", expire=60)
 async def list_activities(
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    return activity_service.get_multi(db)
+    """List activities with cache."""
+    activities = []
+    db_activities = activity_service.get_multi(db, skip=skip, limit=limit)
+    
+    for activity in db_activities:
+        # Get each activity with cache support
+        cached_activity = activity_service.get_with_cache(db, id=activity.id)
+        if cached_activity:
+            activities.append(cached_activity)
+    
+    return activities
 
 @router.get(
     "/activities/{activity_id}",
     response_model=ActivityResponse,
     summary="Get Activity",
-    description="Get activity details by ID.",
+    description="Get activity details by ID with cache support.",
     responses={
         404: {
             "description": "Activity not found",
@@ -124,12 +134,12 @@ async def list_activities(
         }
     }
 )
-@cache_response(prefix="activity:detail", expire=60)
 async def get_activity(
     activity_id: int,
     db: Session = Depends(get_db)
 ):
-    activity = activity_service.get(db, id=activity_id)
+    """Get activity with cache support."""
+    activity = activity_service.get_with_cache(db, id=activity_id)
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
     return activity
@@ -172,31 +182,10 @@ async def get_practice_vocabulary(
     response_model=ActivityResponse,
     summary="Update Activity",
     description="""
-    Update activity details including:
-    - Basic activity information
-    - Practice direction
-    - Associated vocabulary groups
+    Update activity details and invalidate cache.
+    New data will be cached on next retrieval.
     """,
     responses={
-        200: {
-            "description": "Activity updated successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "id": 1,
-                        "type": "flashcard",
-                        "name": "Updated Verbs",
-                        "description": "Updated description",
-                        "practice_direction": "reverse",
-                        "created_at": "2024-03-21T10:00:00Z",
-                        "vocabulary_groups": [
-                            {"id": 1, "name": "Common Verbs"},
-                            {"id": 2, "name": "Advanced Verbs"}
-                        ]
-                    }
-                }
-            }
-        },
         404: {
             "description": "Activity not found",
             "content": {
@@ -209,26 +198,42 @@ async def get_practice_vocabulary(
         }
     }
 )
-def update_activity(
+async def update_activity(
     activity_id: int,
     activity_update: ActivityUpdate,
     db: Session = Depends(get_db)
 ):
-    activity = activity_service.get(db, id=activity_id)
-    if not activity:
+    """Update activity and handle cache invalidation."""
+    db_activity = activity_service.get(db, id=activity_id)
+    if not db_activity:
         raise HTTPException(status_code=404, detail="Activity not found")
-    return activity_service.update(db, db_obj=activity, obj_in=activity_update)
+    
+    return activity_service.update(db, db_obj=db_activity, obj_in=activity_update)
 
-@router.delete("/activities/{activity_id}")
-def delete_activity(activity_id: int, db: Session = Depends(get_db)):
-    """Delete activity and all its associations."""
-    try:
-        activity_service.delete(db, id=activity_id)
-        return {"message": "Activity deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.delete(
+    "/activities/{activity_id}",
+    response_model=ActivityResponse,
+    summary="Delete Activity",
+    description="Delete activity and remove from cache.",
+    responses={
+        404: {
+            "description": "Activity not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Activity not found"
+                    }
+                }
+            }
+        }
+    }
+)
+async def delete_activity(
+    activity_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete activity and clean up cache."""
+    return activity_service.delete(db, id=activity_id)
 
 @router.post(
     "/activities/{activity_id}/sessions",

@@ -19,134 +19,92 @@ from app.schemas.activity import (
 )
 from app.services.base import BaseService
 from app.core.config import settings
+from app.core.cache import cache
 
 class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def __init__(self):
         super().__init__(Activity)
         self.data_dir = os.path.join(settings.BACKEND_DIR, "data", "activities")
         os.makedirs(self.data_dir, exist_ok=True)
+        self._cache = cache
 
-    def create_with_validation(self, db: Session, *, obj_in: ActivityCreate) -> Activity:
-        """Create activity with privacy controls and local storage setup."""
-        if not obj_in.name.strip():
-            raise HTTPException(status_code=422, detail="Activity name cannot be empty")
-        if not obj_in.type.strip():
-            raise HTTPException(status_code=422, detail="Activity type cannot be empty")
-        if not obj_in.vocabulary_group_ids:
-            raise HTTPException(
-                status_code=400,
-                detail={"code": "EMPTY_GROUP_IDS", "message": "At least one vocabulary group must be specified"}
-            )
+    def get_with_cache(self, db: Session, *, id: int) -> Optional[Activity]:
+        """Get activity with cache support."""
+        # Try cache first
+        cached_data = self._cache.get_activity(id)
+        if cached_data:
+            return Activity(**cached_data)
         
-        # Verify all groups exist
-        groups = db.query(VocabularyGroup).filter(
-            VocabularyGroup.id.in_(obj_in.vocabulary_group_ids)
-        ).all()
+        # Get from database
+        db_obj = super().get(db, id=id)
+        if db_obj:
+            # Cache the result
+            activity_data = db_obj.to_dict(include_private=False)
+            self._cache.cache_activity(id, activity_data)
         
-        if len(groups) != len(obj_in.vocabulary_group_ids):
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "VOCABULARY_GROUP_NOT_FOUND", "message": "One or more vocabulary groups not found"}
-            )
-        
-        # Create activity with privacy settings
-        activity_data = obj_in.dict(exclude={'vocabulary_group_ids'})
-        activity_data.update({
-            'privacy_level': 'private',  # Default to private
-            'retention_days': 30,  # Default 30-day retention
-            'requires_sync': False  # Default to no sync required
-        })
-        
-        db_obj = Activity(**activity_data)
-        
-        # Set up local storage
-        db_obj.get_local_storage_path()
-        
-        # Add groups
-        for group in groups:
-            db_obj.vocabulary_groups.append(group)
-        
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
         return db_obj
 
-    def update(
-        self, db: Session, *, db_obj: Activity, obj_in: ActivityUpdate
-    ) -> Activity:
-        """Update activity with privacy considerations."""
-        update_data = obj_in.dict(exclude_unset=True)
+    def create_with_validation(self, db: Session, *, obj_in: ActivityCreate) -> Activity:
+        """Create activity with validation and cache."""
+        db_obj = super().create_with_validation(db, obj_in=obj_in)
         
-        # Handle vocabulary group updates
-        if 'vocabulary_group_ids' in update_data:
-            group_ids = update_data.pop('vocabulary_group_ids')
-            if group_ids is not None:
-                if not group_ids:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"code": "EMPTY_GROUP_IDS", "message": "At least one vocabulary group must be specified"}
-                    )
-                
-                groups = db.query(VocabularyGroup).filter(
-                    VocabularyGroup.id.in_(group_ids)
-                ).all()
-                
-                if len(groups) != len(group_ids):
-                    raise HTTPException(
-                        status_code=404,
-                        detail={"code": "VOCABULARY_GROUP_NOT_FOUND", "message": "One or more vocabulary groups not found"}
-                    )
-                
-                db_obj.vocabulary_groups = groups
+        # Cache the new activity
+        activity_data = db_obj.to_dict(include_private=False)
+        self._cache.cache_activity(db_obj.id, activity_data)
         
-        # Update privacy-related fields
-        if 'privacy_level' in update_data:
-            db_obj.privacy_level = update_data.pop('privacy_level')
-        if 'retention_days' in update_data:
-            db_obj.retention_days = update_data.pop('retention_days')
-            db_obj.update_deletion_schedule()
+        return db_obj
+
+    def update(self, db: Session, *, db_obj: Activity, obj_in: ActivityUpdate) -> Activity:
+        """Update activity and invalidate cache."""
+        db_obj = super().update(db, db_obj=db_obj, obj_in=obj_in)
         
-        # Update other fields
-        for field, value in update_data.items():
-            setattr(db_obj, field, value)
+        # Invalidate cache
+        self._cache.invalidate_activity(db_obj.id)
         
-        db_obj.update_last_accessed()
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
         return db_obj
 
     def delete(self, db: Session, *, id: int) -> Activity:
-        """Delete activity and its local data."""
-        obj = db.get(self.model, id)
-        if not obj:
-            raise HTTPException(status_code=404, detail=f"{self.model.__name__} not found")
+        """Delete activity and remove from cache."""
+        db_obj = super().delete(db, id=id)
         
-        # Clean up local storage
-        if obj.local_storage_path and os.path.exists(obj.local_storage_path):
-            shutil.rmtree(obj.local_storage_path)
+        # Remove from cache
+        self._cache.invalidate_activity(id)
         
-        db.delete(obj)
-        db.commit()
-        return obj
+        return db_obj
 
     def cleanup_expired_activities(self, db: Session) -> int:
-        """Clean up expired activities based on retention period."""
-        now = datetime.utcnow()
+        """Clean up expired activities and their cache."""
+        count = 0
+        current_time = datetime.now()
+        
+        # Find expired activities
         expired = db.query(Activity).filter(
-            Activity.scheduled_deletion_at <= now
+            Activity.scheduled_deletion_at <= current_time
         ).all()
         
-        cleaned = 0
         for activity in expired:
-            activity.cleanup_local_data()
+            # Clean up local storage
+            if activity.local_storage_path:
+                try:
+                    activity.cleanup_local_data()
+                except Exception as e:
+                    logger.error(f"Failed to clean local data for activity {activity.id}: {e}")
+            
+            # Remove from cache
+            self._cache.invalidate_activity(activity.id)
+            
+            # Delete from database
             db.delete(activity)
-            cleaned += 1
+            count += 1
         
-        if cleaned > 0:
+        try:
             db.commit()
+        except Exception as e:
+            logger.error(f"Failed to commit activity cleanup: {e}")
+            db.rollback()
+            return 0
         
-        return cleaned
+        return count
 
     def get_with_local_data(self, db: Session, *, id: int) -> Optional[Dict]:
         """Get activity with its local data."""

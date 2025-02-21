@@ -1,4 +1,4 @@
-from typing import Any, Optional, Set
+from typing import Any, Optional, Set, Dict
 from datetime import datetime, timedelta
 import json
 import os
@@ -31,11 +31,18 @@ class LocalCache:
         self.max_entry_size = 1 * 1024 * 1024   # 1MB max per entry
         self.cleanup_threshold = 0.9  # 90% full triggers cleanup
         
-        # Sensitive patterns for sanitization
+        # Enhanced sensitive patterns for activity data
         self.sensitive_patterns = {
             "email", "password", "token", "secret",
-            "api_key", "session", "auth", "key"
+            "api_key", "session", "auth", "key",
+            "user_id", "ip_address", "device_info",
+            "location", "timestamp", "metadata"
         }
+        
+        # Activity-specific settings
+        self.activity_cache_prefix = "activity:"
+        self.activity_cache_expire = 300  # 5 minutes default
+        self.max_activity_cache_size = 10 * 1024 * 1024  # 10MB for activities
         
         self.hit_count = 0
         self.miss_count = 0
@@ -56,8 +63,24 @@ class LocalCache:
         return self.cache_dir / f"{hashed_key}.cache"
     
     def _sanitize_data(self, data: Any) -> Any:
-        """Remove sensitive information from cached data."""
+        """Enhanced sanitization with activity-specific rules."""
         if isinstance(data, dict):
+            # Special handling for activity data
+            if "type" in data and "privacy_level" in data:
+                # This is an activity object
+                sanitized = {
+                    k: (
+                        "[REDACTED]" if any(p in k.lower() for p in self.sensitive_patterns)
+                        else (
+                            self._sanitize_activity_field(k, v)
+                            if k in {"description", "local_storage_path", "metadata"}
+                            else self._sanitize_data(v)
+                        )
+                    )
+                    for k, v in data.items()
+                }
+                return sanitized
+            
             return {
                 k: "[REDACTED]" if any(p in k.lower() for p in self.sensitive_patterns)
                 else self._sanitize_data(v)
@@ -66,6 +89,20 @@ class LocalCache:
         elif isinstance(data, list):
             return [self._sanitize_data(item) for item in data]
         return data
+    
+    def _sanitize_activity_field(self, field: str, value: Any) -> Any:
+        """Sanitize specific activity fields."""
+        if field == "description":
+            # Remove any potential sensitive information from descriptions
+            return re.sub(r"(https?://\S+)|(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)", "[REDACTED]", str(value))
+        elif field == "local_storage_path":
+            # Only return the filename, not the full path
+            return Path(str(value)).name if value else None
+        elif field == "metadata":
+            # Remove all metadata except safe fields
+            safe_metadata_fields = {"created_at", "updated_at", "type", "format"}
+            return {k: v for k, v in value.items() if k in safe_metadata_fields} if isinstance(value, dict) else None
+        return value
     
     def _clean_expired_cache(self) -> None:
         """Securely clean expired cache files."""
@@ -236,6 +273,51 @@ class LocalCache:
             except (json.JSONDecodeError, KeyError, ValueError):
                 continue
         return keys
+
+    def cache_activity(self, activity_id: int, data: Dict, expire: Optional[int] = None) -> bool:
+        """Cache activity data with enhanced privacy controls."""
+        key = f"{self.activity_cache_prefix}{activity_id}"
+        
+        # Additional privacy checks for activity data
+        if not self._is_safe_activity_data(data):
+            return False
+        
+        # Set activity-specific expiration
+        if expire is None:
+            expire = self.activity_cache_expire
+        
+        return self.set(key, data, expire)
+    
+    def get_activity(self, activity_id: int) -> Optional[Dict]:
+        """Get cached activity data with privacy checks."""
+        key = f"{self.activity_cache_prefix}{activity_id}"
+        return self.get(key)
+    
+    def invalidate_activity(self, activity_id: int) -> bool:
+        """Invalidate cached activity data."""
+        key = f"{self.activity_cache_prefix}{activity_id}"
+        return self.delete(key)
+    
+    def _is_safe_activity_data(self, data: Dict) -> bool:
+        """Check if activity data meets privacy requirements."""
+        if not isinstance(data, dict):
+            return False
+            
+        # Check for required fields
+        required_fields = {"id", "type", "name"}
+        if not all(field in data for field in required_fields):
+            return False
+            
+        # Check data size
+        if len(json.dumps(data)) > self.max_activity_cache_size:
+            return False
+            
+        # Validate privacy level
+        privacy_level = data.get("privacy_level", "private")
+        if privacy_level not in {"private", "shared", "public"}:
+            return False
+            
+        return True
 
 # Create singleton instance
 cache = LocalCache.get_instance()
