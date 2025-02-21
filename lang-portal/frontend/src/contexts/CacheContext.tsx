@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useCallback, useState } from 'react';
+import React, { createContext, useContext, useCallback, useState, useEffect } from 'react';
+import { cacheCompression } from '../utils/cacheCompression';
+import { cacheMonitor } from '../utils/cacheMonitoring';
 
 interface CacheInfo {
   hit: boolean;
@@ -17,6 +19,7 @@ interface CacheContextType {
   invalidateCache: (pattern?: string) => Promise<void>;
   clearCache: () => Promise<void>;
   getCacheStatus: (key: string) => Promise<CacheInfo | null>;
+  getStorageStats: () => Promise<{ usage: number; quota: number }>;
 }
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
@@ -27,19 +30,33 @@ const MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB default max size
 export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cacheSize, setCacheSize] = useState<number>(0);
 
+  // Monitor cache health periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      cacheMonitor.logHealth();
+    }, 60000); // Log health every minute in development
+
+    return () => clearInterval(interval);
+  }, []);
+
   const getCacheItem = useCallback(async (key: string): Promise<CacheData | null> => {
     try {
       const item = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
-      if (!item) return null;
+      if (!item) {
+        cacheMonitor.recordMiss();
+        return null;
+      }
 
-      const { data, timestamp, expires } = JSON.parse(item);
+      const { data, timestamp, expires } = cacheCompression.decompress(item);
       const now = Date.now();
 
       if (expires && now > expires) {
         localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
+        cacheMonitor.recordMiss();
         return null;
       }
 
+      cacheMonitor.recordHit();
       return {
         data,
         cacheInfo: {
@@ -50,6 +67,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     } catch (error) {
       console.error('Cache read error:', error);
+      cacheMonitor.recordError();
       return null;
     }
   }, []);
@@ -62,8 +80,13 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         expires
       };
 
+      // Check if compression should be applied
+      const shouldCompress = cacheCompression.shouldCompress(cacheData);
+      const serializedData = shouldCompress
+        ? cacheCompression.compress(cacheData)
+        : JSON.stringify(cacheData);
+
       // Check cache size before storing
-      const serializedData = JSON.stringify(cacheData);
       const dataSize = new Blob([serializedData]).size;
 
       if (dataSize + cacheSize > MAX_CACHE_SIZE) {
@@ -74,6 +97,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setCacheSize(prev => prev + dataSize);
     } catch (error) {
       console.error('Cache write error:', error);
+      cacheMonitor.recordError();
       throw new Error('Failed to store in cache');
     }
   }, [cacheSize]);
@@ -89,7 +113,9 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const item = localStorage.getItem(key);
         if (!item) continue;
 
-        const { expires } = JSON.parse(item);
+        const decompressed = cacheCompression.decompress(item);
+        const { expires } = decompressed;
+
         if (expires && now > expires) {
           localStorage.removeItem(key);
         } else {
@@ -97,6 +123,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       } catch (error) {
         console.error('Cache cleanup error:', error);
+        localStorage.removeItem(key);
       }
     }
 
@@ -117,6 +144,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const keys = Object.keys(localStorage).filter(key => key.startsWith(STORAGE_PREFIX));
     keys.forEach(key => localStorage.removeItem(key));
     setCacheSize(0);
+    cacheMonitor.resetMetrics();
   }, []);
 
   const getCacheStatus = useCallback(async (key: string): Promise<CacheInfo | null> => {
@@ -124,7 +152,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const item = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
       if (!item) return null;
 
-      const { timestamp, expires } = JSON.parse(item);
+      const { timestamp, expires } = cacheCompression.decompress(item);
       return {
         hit: true,
         timestamp,
@@ -136,12 +164,21 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
+  const getStorageStats = useCallback(async () => {
+    const stats = cacheCompression.getStorageStats();
+    return {
+      usage: stats.totalSize,
+      quota: MAX_CACHE_SIZE
+    };
+  }, []);
+
   const value = {
     getCacheItem,
     setCacheItem,
     invalidateCache,
     clearCache,
-    getCacheStatus
+    getCacheStatus,
+    getStorageStats
   };
 
   return (
