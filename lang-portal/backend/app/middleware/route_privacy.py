@@ -157,19 +157,53 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
         # Add privacy headers
         self._add_privacy_headers(response, rules)
         
-        # Sanitize response content if needed
-        if (
+        # Skip sanitization for non-JSON or compressed responses
+        if not (
             rules["sanitize_response"] and
             response.headers.get("content-type", "").startswith("application/json") and
-            hasattr(response, "body")  # Check if response has body attribute
+            not response.headers.get("content-encoding")
         ):
+            return response
+
+        try:
+            # Get response body
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+
+            # Try to sanitize if it's JSON
             try:
-                response_body = response.body.decode()
-                sanitized_body = self._sanitize_response_data(response_body)
-                response.body = sanitized_body.encode()
-                response.headers["content-length"] = str(len(response.body))
-            except (AttributeError, UnicodeDecodeError):
-                # Skip sanitization for streaming responses or binary data
-                pass
-        
-        return response 
+                response_text = body.decode('utf-8')
+                sanitized_body = self._sanitize_response_data(response_text)
+                body = sanitized_body.encode('utf-8')
+            except UnicodeDecodeError:
+                # Not UTF-8 encoded, return original response
+                return Response(
+                    content=body,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type=response.media_type
+                )
+
+            # Create new response with sanitized body
+            headers = dict(response.headers)
+            
+            # Ensure we have exactly one valid Content-Length header
+            headers.pop("content-length", None)  # Remove any existing Content-Length headers
+            headers.pop("Content-Length", None)  # Remove any capitalized variants
+            content_length = str(len(body))  # Calculate new content length
+            headers["content-length"] = content_length  # Set single, valid Content-Length header
+            
+            # Remove any transfer-encoding headers as we're using content-length
+            headers.pop("transfer-encoding", None)
+            headers.pop("Transfer-Encoding", None)
+            
+            return Response(
+                content=body,
+                status_code=response.status_code,
+                headers=headers,
+                media_type=response.media_type
+            )
+        except Exception:
+            # If anything goes wrong, return original response
+            return response

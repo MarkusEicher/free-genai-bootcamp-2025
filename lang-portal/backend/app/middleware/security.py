@@ -33,16 +33,16 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin, same-origin"
-        response.headers["Permissions-Policy"] = "interest-cohort=()"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         
         # Add Content Security Policy based on mode
         if self.dev_mode and request.url.path in ["/docs", "/redoc", "/openapi.json"]:
             # Development mode with Swagger UI support
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
-                "img-src 'self' data:; "
-                "style-src 'self' 'unsafe-inline'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "img-src 'self' https://fastapi.tiangolo.com data:; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
                 "font-src 'self' data:;"
             )
         else:

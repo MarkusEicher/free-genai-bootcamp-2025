@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html, get_openapi
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.utils import get_openapi
 from app.api.v1.api import api_router
 from app.middleware.security import SecurityMiddleware
 from app.middleware.privacy import PrivacyMiddleware
@@ -38,7 +39,7 @@ app = FastAPI(
     """ if DEV_MODE else ""),
     version="0.1.0",
     docs_url=None,  # We'll serve our own docs
-    redoc_url="/redoc" if DEV_MODE else None,
+    redoc_url=None,  # We'll serve our own ReDoc
     openapi_url="/openapi.json" if DEV_MODE else None,
     openapi_tags=[
         {
@@ -50,46 +51,40 @@ app = FastAPI(
     ]
 )
 
-# Mount static files for Swagger UI in development mode
+# Serve API documentation in development mode
 if DEV_MODE:
-    static_dir = Path(__file__).parent.parent / "static"
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
     @app.get("/docs", include_in_schema=False)
     async def custom_swagger_ui_html():
-        """Serve custom Swagger UI in development mode."""
+        """Serve Swagger UI documentation in development mode."""
         return get_swagger_ui_html(
             openapi_url="/openapi.json",
             title=app.title + " - API Documentation",
-            swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js",
-            swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css",
+            swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+            swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+            swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png"
         )
 
     @app.get("/redoc", include_in_schema=False)
     async def redoc_html():
-        """Serve ReDoc in development mode."""
+        """Serve ReDoc documentation in development mode."""
         return get_redoc_html(
             openapi_url="/openapi.json",
             title=app.title + " - API Documentation",
             redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js",
+            redoc_favicon_url="https://fastapi.tiangolo.com/img/favicon.png"
         )
 
     @app.get("/openapi.json", include_in_schema=False)
     async def get_openapi_endpoint():
         """Serve OpenAPI schema in development mode."""
-        return JSONResponse(
-            content=get_openapi(
-                title=app.title,
-                version=app.version,
-                description=app.description,
-                routes=app.routes,
-            )
+        return get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
         )
 
 # Add middleware in order of execution
-app.add_middleware(PrivacyMiddleware)  # Global privacy checks
-app.add_middleware(RoutePrivacyMiddleware)  # Route-specific privacy rules
-app.add_middleware(SecurityMiddleware)  # Security headers and checks
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -97,6 +92,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityMiddleware)  # Security headers and checks
+app.add_middleware(RoutePrivacyMiddleware)  # Route-specific privacy rules
+# Temporarily disable PrivacyMiddleware to isolate the issue
+# app.add_middleware(PrivacyMiddleware)  # Global privacy checks
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
@@ -126,7 +125,7 @@ async def health_check():
         "mode": "development" if DEV_MODE else "production"
     }
 
-# Root endpoint
+# Root endpoint with explicit response
 @app.get("/", 
     summary="Root Endpoint",
     description="Returns a welcome message and basic API information.",
@@ -146,16 +145,11 @@ async def health_check():
     }
 )
 async def root():
-    return JSONResponse(
-        content={
-            "message": "Welcome to the Language Learning Portal API",
-            "mode": "development" if DEV_MODE else "production"
-        },
-        headers={
-            "Cache-Control": "no-store, max-age=0",
-            "X-Content-Type-Options": "nosniff"
-        }
-    )
+    """Root endpoint returning basic API information."""
+    return {
+        "message": "Welcome to the Language Learning Portal API",
+        "mode": "development" if DEV_MODE else "production"
+    }
 
 # Redirect common paths to their API v1 equivalents
 @app.get("/vocabulary")
