@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { DashboardProgress } from './components/DashboardProgress';
 import { DashboardLatestSessions } from './components/DashboardLatestSessions';
@@ -11,7 +11,7 @@ import { SkipLink } from '../../components/common/SkipLink';
 import { dashboardApi } from '../../api/dashboard';
 import type { DashboardData } from '../../types/dashboard';
 import { useDashboardKeyboardNav } from '../../hooks/useDashboardKeyboardNav';
-import { useCache } from '../../contexts/CacheContext';
+import { useDashboardCache } from '../../hooks/useDashboardCache';
 
 const DashboardContent: React.FC<{
   data: DashboardData;
@@ -71,12 +71,28 @@ const DashboardContent: React.FC<{
 export default function Dashboard() {
   const { data, isLoading, isError, error, refetch } = useDashboardData();
   const { currentSection, handleKeyDown } = useDashboardKeyboardNav();
-  const { invalidateCache } = useCache();
+  const { 
+    refreshAll, 
+    handleSessionComplete,
+    lastUpdates 
+  } = useDashboardCache({
+    onWarmed: () => {
+      console.log('Dashboard cache warmed');
+    },
+    onError: (error) => {
+      console.error('Dashboard cache error:', error);
+    }
+  });
 
-  const handleRefreshAll = async () => {
-    await invalidateCache('dashboard');
-    window.location.reload(); // Refresh all components
-  };
+  // Listen for session completion events
+  useEffect(() => {
+    const handleSessionEvent = () => {
+      handleSessionComplete();
+    };
+
+    window.addEventListener('session:complete', handleSessionEvent);
+    return () => window.removeEventListener('session:complete', handleSessionEvent);
+  }, [handleSessionComplete]);
 
   if (isLoading) {
     return (
@@ -108,7 +124,7 @@ export default function Dashboard() {
           Learning Dashboard
         </h1>
         <button
-          onClick={handleRefreshAll}
+          onClick={() => refreshAll()}
           className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           aria-label="Refresh all dashboard data"
         >
