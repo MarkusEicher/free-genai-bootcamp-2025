@@ -4,17 +4,29 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from app.api.v1.api import api_router
 from app.middleware.security import SecurityMiddleware
+from app.middleware.privacy import PrivacyMiddleware
+from app.middleware.route_privacy import RoutePrivacyMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from pathlib import Path
 
 # Development mode flag
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 
-# FastAPI app with conditional docs
+# FastAPI app with conditional docs and privacy-focused settings
 app = FastAPI(
     title="Language Learning Portal" + (" (Development Mode)" if DEV_MODE else ""),
     description="""
-    Language Learning Portal API
+    Language Learning Portal API - Privacy-Focused Local Application
+    
+    This application is designed to run locally and respects user privacy:
+    - No external connections
+    - No tracking or analytics
+    - No cookies or session data
+    - No user data collection
+    - Route-specific privacy controls
+    - Strict response sanitization
+    - Comprehensive privacy headers
     """ + ("""
     
     DEVELOPMENT MODE NOTICE
@@ -27,7 +39,15 @@ app = FastAPI(
     version="0.1.0",
     docs_url=None,  # We'll serve our own docs
     redoc_url="/redoc" if DEV_MODE else None,
-    openapi_url="/openapi.json" if DEV_MODE else None
+    openapi_url="/openapi.json" if DEV_MODE else None,
+    openapi_tags=[
+        {
+            "name": "Privacy",
+            "description": "This API follows strict privacy guidelines and GDPR compliance. "
+                         "Each route has specific privacy rules for caching, allowed parameters, "
+                         "and response sanitization."
+        }
+    ]
 )
 
 # Mount static files for Swagger UI in development mode
@@ -45,38 +65,17 @@ if DEV_MODE:
             swagger_favicon_url="/static/swagger-ui/favicon.png"
         )
 
-# Middleware to restrict docs access
-@app.middleware("http")
-async def restrict_docs_access(request: Request, call_next):
-    # Block docs in non-dev mode
-    if not DEV_MODE and any(path in request.url.path for path in ["/docs", "/redoc", "/openapi.json"]):
-        return JSONResponse(
-            status_code=404,
-            content={"detail": "Not found"}
-        )
-    
-    # Only allow local access in dev mode
-    if DEV_MODE and any(path in request.url.path for path in ["/docs", "/redoc", "/openapi.json"]):
-        if not request.client.host in ["127.0.0.1", "localhost"]:
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Development documentation only available locally"}
-            )
-    
-    return await call_next(request)
-
-# Add security headers for docs
-@app.middleware("http")
-async def add_docs_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    if DEV_MODE and any(path in request.url.path for path in ["/docs", "/redoc", "/openapi.json"]):
-        response.headers["X-Development-Mode"] = "true"
-        response.headers["Cache-Control"] = "no-store, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-    return response
-
-# Add security middleware
-app.add_middleware(SecurityMiddleware)
+# Add middleware in order of execution
+app.add_middleware(PrivacyMiddleware)  # Global privacy checks
+app.add_middleware(RoutePrivacyMiddleware)  # Route-specific privacy rules
+app.add_middleware(SecurityMiddleware)  # Security headers and checks
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
@@ -84,22 +83,51 @@ app.include_router(api_router, prefix="/api/v1")
 # Health check endpoint
 @app.get("/health", 
     summary="Health Check",
-    description="Returns the health status of the API.")
+    description="Returns the health status of the API.",
+    response_description="Basic health information without sensitive data",
+    responses={
+        200: {
+            "description": "Health status",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "mode": "development" if DEV_MODE else "production"
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_check():
     return {
         "status": "healthy",
-        "version": "0.1.0"
+        "mode": "development" if DEV_MODE else "production"
     }
 
 # Root endpoint
 @app.get("/", 
     summary="Root Endpoint",
-    description="Returns a welcome message and basic API information.")
+    description="Returns a welcome message and basic API information.",
+    response_description="Welcome message and mode information",
+    responses={
+        200: {
+            "description": "Welcome message",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Welcome to the Language Learning Portal API",
+                        "mode": "development" if DEV_MODE else "production"
+                    }
+                }
+            }
+        }
+    }
+)
 async def root():
     return {
         "message": "Welcome to the Language Learning Portal API",
-        "version": "0.1.0",
-        "mode": "Development" if DEV_MODE else "Production"
+        "mode": "development" if DEV_MODE else "production"
     }
 
 # Redirect common paths to their API v1 equivalents

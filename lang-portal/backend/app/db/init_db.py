@@ -12,7 +12,7 @@ from app.models.activity import Activity, Session, SessionAttempt
 from app.models.progress import VocabularyProgress
 
 def init_db(db_url: str = settings.DATABASE_URL):
-    """Initialize the database with all tables."""
+    """Initialize the database connection."""
     engine = create_engine(db_url)
     
     # Enable foreign key support for SQLite
@@ -21,10 +21,6 @@ def init_db(db_url: str = settings.DATABASE_URL):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
-    
-    # Create all tables
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
     
     return engine
 

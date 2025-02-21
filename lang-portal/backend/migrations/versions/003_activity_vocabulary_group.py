@@ -43,9 +43,7 @@ def upgrade():
                      server_default='forward', nullable=False)
         )
     
-    # Drop old activity_vocabulary table and its indexes
-    op.drop_index('ix_activity_vocabulary_activity_id', 'activity_vocabulary')
-    op.drop_index('ix_activity_vocabulary_vocabulary_id', 'activity_vocabulary')
+    # Drop old activity_vocabulary table
     op.drop_table('activity_vocabulary')
 
 def downgrade():
@@ -60,12 +58,6 @@ def downgrade():
                               ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('activity_id', 'vocabulary_id')
     )
-    
-    # Recreate old indexes
-    op.create_index('ix_activity_vocabulary_activity_id', 
-                   'activity_vocabulary', ['activity_id'])
-    op.create_index('ix_activity_vocabulary_vocabulary_id', 
-                   'activity_vocabulary', ['vocabulary_id'])
     
     # Remove practice_direction from activities
     with op.batch_alter_table('activities') as batch_op:
