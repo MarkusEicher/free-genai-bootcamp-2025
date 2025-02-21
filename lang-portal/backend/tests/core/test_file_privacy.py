@@ -2,11 +2,12 @@
 import pytest
 import os
 import io
+import asyncio
 from PIL import Image
 from pathlib import Path
 from datetime import datetime
 from fastapi import UploadFile
-from app.core.config import settings
+from app.core.file_handler import SecureFileHandler
 
 @pytest.fixture
 def test_image():
@@ -28,49 +29,57 @@ def test_image():
     return img_io
 
 @pytest.fixture
-def temp_upload_dir(tmp_path):
-    """Create a temporary upload directory."""
-    upload_dir = tmp_path / "uploads"
-    upload_dir.mkdir()
-    return upload_dir
+def test_upload_file(test_image):
+    """Create a FastAPI UploadFile object."""
+    return UploadFile(
+        filename="test.jpg",
+        file=test_image,
+        content_type="image/jpeg"
+    )
+
+@pytest.fixture
+def file_handler(tmp_path):
+    """Create a SecureFileHandler instance."""
+    return SecureFileHandler(tmp_path / "uploads")
 
 class TestFilePrivacy:
-    def test_file_extension_validation(self, test_image, temp_upload_dir):
+    @pytest.mark.asyncio
+    async def test_file_extension_validation(self, file_handler, test_upload_file):
         """Test that only allowed file extensions are accepted."""
         # Test valid extensions
-        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif']
-        for ext in valid_extensions:
-            file_path = temp_upload_dir / f"test{ext}"
-            with open(file_path, 'wb') as f:
-                f.write(test_image.getvalue())
-            assert self._is_valid_extension(file_path)
+        for ext in ['.jpg', '.jpeg', '.png', '.gif']:
+            test_upload_file.filename = f"test{ext}"
+            saved_path = await file_handler.save_file(test_upload_file)
+            assert saved_path.exists()
+            assert saved_path.suffix.lower() == ext
 
         # Test invalid extensions
-        invalid_extensions = ['.exe', '.php', '.js', '.html']
-        for ext in invalid_extensions:
-            file_path = temp_upload_dir / f"test{ext}"
-            with open(file_path, 'wb') as f:
-                f.write(test_image.getvalue())
-            assert not self._is_valid_extension(file_path)
+        for ext in ['.exe', '.php', '.js', '.html']:
+            test_upload_file.filename = f"test{ext}"
+            with pytest.raises(ValueError, match="File type not allowed"):
+                await file_handler.save_file(test_upload_file)
 
-    def test_metadata_stripping(self, test_image):
+    @pytest.mark.asyncio
+    async def test_metadata_stripping(self, file_handler, test_upload_file):
         """Test that sensitive metadata is stripped from uploaded files."""
-        # Save image with metadata
-        img_with_metadata = Image.open(test_image)
-        assert hasattr(img_with_metadata, '_getexif')
-        exif_data = img_with_metadata._getexif()
-        assert exif_data is not None
-
-        # Strip metadata
-        img_io = io.BytesIO()
-        img_with_metadata.save(img_io, 'JPEG', exif=None)
-        img_io.seek(0)
-
+        # Save file with metadata stripping
+        saved_path = await file_handler.save_file(test_upload_file, strip_metadata=True)
+        
         # Verify metadata is removed
-        img_stripped = Image.open(img_io)
-        assert not hasattr(img_stripped, '_getexif') or img_stripped._getexif() is None
+        with Image.open(saved_path) as img:
+            assert not hasattr(img, '_getexif') or img._getexif() is None
 
-    def test_secure_file_paths(self, temp_upload_dir):
+        # Save file without metadata stripping
+        saved_path = await file_handler.save_file(test_upload_file, strip_metadata=False)
+        
+        # Verify metadata is preserved
+        with Image.open(saved_path) as img:
+            assert hasattr(img, '_getexif')
+            exif = img._getexif()
+            assert exif is not None
+            assert 0x0110 in exif  # Camera model should be present
+
+    def test_secure_file_paths(self, file_handler):
         """Test that file paths are secure and cannot be manipulated."""
         unsafe_paths = [
             "../test.jpg",
@@ -78,122 +87,117 @@ class TestFilePrivacy:
             "/etc/shadow",
             "test/../../etc/hosts",
             "test.jpg;rm -rf /",
-            "test.jpg\x00.exe"
+            "test.jpg\x00.exe",
+            ".git/config",
+            "..\\windows\\system32\\cmd.exe"
         ]
 
         for unsafe_path in unsafe_paths:
-            assert not self._is_safe_path(temp_upload_dir, unsafe_path)
+            assert not file_handler._is_safe_path(unsafe_path)
 
         safe_paths = [
-            "test.jpg",
-            "subfolder/test.jpg",
-            "test_123.jpg",
-            "test-file.jpg"
+            file_handler.base_dir / "test.jpg",
+            file_handler.base_dir / "subfolder" / "test.jpg",
+            file_handler.base_dir / "test_123.jpg",
+            file_handler.base_dir / "test-file.jpg"
         ]
 
         for safe_path in safe_paths:
-            assert self._is_safe_path(temp_upload_dir, safe_path)
+            assert file_handler._is_safe_path(safe_path)
 
-    def test_secure_file_deletion(self, test_image, temp_upload_dir):
+    @pytest.mark.asyncio
+    async def test_secure_file_deletion(self, file_handler, test_upload_file):
         """Test that files are securely deleted."""
-        file_path = temp_upload_dir / "test.jpg"
+        # Save file
+        saved_path = await file_handler.save_file(test_upload_file)
+        assert saved_path.exists()
         
-        # Write test file
-        with open(file_path, 'wb') as f:
-            f.write(test_image.getvalue())
-        
-        # Verify file exists
-        assert file_path.exists()
+        # Get file content for comparison
+        with open(saved_path, 'rb') as f:
+            original_content = f.read()
         
         # Securely delete file
-        self._secure_delete(file_path)
+        file_handler.secure_delete(saved_path)
         
         # Verify file is deleted
-        assert not file_path.exists()
+        assert not saved_path.exists()
         
-        # Verify no data remnants
-        if file_path.exists():
-            with open(file_path, 'rb') as f:
+        # If somehow file still exists, verify content is zeroed
+        if saved_path.exists():
+            with open(saved_path, 'rb') as f:
                 content = f.read()
-                assert content == b'' or all(b == 0 for b in content)
+                assert content != original_content
+                assert all(b == 0 for b in content)
 
-    def test_file_permissions(self, test_image, temp_upload_dir):
+    @pytest.mark.asyncio
+    async def test_file_permissions(self, file_handler, test_upload_file):
         """Test that uploaded files have correct permissions."""
-        file_path = temp_upload_dir / "test.jpg"
+        # Save file
+        saved_path = await file_handler.save_file(test_upload_file)
         
-        # Write test file
-        with open(file_path, 'wb') as f:
-            f.write(test_image.getvalue())
+        # Verify directory permissions
+        assert file_handler.base_dir.stat().st_mode & 0o777 == 0o700
         
-        # Set secure permissions
-        os.chmod(file_path, 0o600)  # User read/write only
-        
-        # Verify permissions
-        stat = os.stat(file_path)
-        assert stat.st_mode & 0o777 == 0o600
+        # Verify file permissions
+        assert saved_path.stat().st_mode & 0o777 == 0o600
 
-    def test_concurrent_file_access(self, test_image, temp_upload_dir):
+    @pytest.mark.asyncio
+    async def test_concurrent_file_access(self, file_handler, test_upload_file):
         """Test that concurrent file access is handled securely."""
-        import threading
-        import time
-        
-        file_path = temp_upload_dir / "test.jpg"
-        access_count = 0
-        lock = threading.Lock()
-        
-        def access_file():
-            nonlocal access_count
+        async def save_file():
             try:
-                with lock:
-                    with open(file_path, 'wb') as f:
-                        f.write(test_image.getvalue())
-                    time.sleep(0.1)  # Simulate processing
-                    with open(file_path, 'rb') as f:
-                        assert f.read() == test_image.getvalue()
-                    access_count += 1
+                saved_path = await file_handler.save_file(test_upload_file)
+                assert saved_path.exists()
+                return True
             except Exception as e:
                 pytest.fail(f"Concurrent access failed: {e}")
-        
-        # Create multiple threads to access the file
-        threads = []
-        for _ in range(5):
-            t = threading.Thread(target=access_file)
-            threads.append(t)
-            t.start()
-        
-        # Wait for all threads to complete
-        for t in threads:
-            t.join()
-        
-        assert access_count == 5  # All accesses successful
+                return False
 
-    @staticmethod
-    def _is_valid_extension(file_path: Path) -> bool:
-        """Check if file has an allowed extension."""
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif'}
-        return file_path.suffix.lower() in allowed_extensions
-
-    @staticmethod
-    def _is_safe_path(base_dir: Path, file_path: str) -> bool:
-        """Check if file path is safe and within base directory."""
-        try:
-            full_path = (base_dir / file_path).resolve()
-            return full_path.is_relative_to(base_dir) and '..' not in file_path
-        except (ValueError, RuntimeError):
-            return False
-
-    @staticmethod
-    def _secure_delete(file_path: Path) -> None:
-        """Securely delete a file by overwriting with zeros."""
-        if not file_path.exists():
-            return
-
-        # Get file size
-        file_size = file_path.stat().st_size
+        # Create multiple tasks
+        tasks = [save_file() for _ in range(5)]
         
-        # Overwrite with zeros
-        with open(file_path, 'wb') as f:
-            f.write(b'\0' * file_size)
+        # Run concurrently
+        results = await asyncio.gather(*tasks)
         
-        # Delete the file
-        file_path.unlink() 
+        # Verify all saves were successful
+        assert all(results)
+
+    @pytest.mark.asyncio
+    async def test_filename_sanitization(self, file_handler, test_upload_file):
+        """Test that filenames are properly sanitized."""
+        unsafe_filenames = [
+            "../../../../etc/passwd.jpg",
+            "shell;command.jpg",
+            "file with spaces.jpg",
+            "file#with#symbols!@#$%^&*.jpg",
+            "very" * 100 + ".jpg",  # Very long filename
+        ]
+
+        for unsafe_name in unsafe_filenames:
+            test_upload_file.filename = unsafe_name
+            saved_path = await file_handler.save_file(test_upload_file)
+            
+            # Check sanitized filename
+            assert len(saved_path.name) <= 65  # timestamp(15) + underscore(1) + name(50) + ext
+            assert all(c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+                      for c in saved_path.stem.split('_', 1)[1])  # Check after timestamp
+            assert saved_path.suffix == '.jpg'
+
+    @pytest.mark.asyncio
+    async def test_subdirectory_handling(self, file_handler, test_upload_file):
+        """Test handling of subdirectories."""
+        # Test valid subdirectory
+        saved_path = await file_handler.save_file(
+            test_upload_file,
+            subdirectory="valid_subdir"
+        )
+        assert saved_path.exists()
+        assert saved_path.parent.name == "valid_subdir"
+        assert saved_path.parent.stat().st_mode & 0o777 == 0o700
+
+        # Test invalid subdirectory
+        with pytest.raises(ValueError):
+            await file_handler.save_file(
+                test_upload_file,
+                subdirectory="../invalid_subdir"
+            ) 
