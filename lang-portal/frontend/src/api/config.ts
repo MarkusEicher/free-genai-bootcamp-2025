@@ -20,6 +20,38 @@ export class ApiError extends Error {
   }
 }
 
+interface CacheHeaders {
+  'X-Cache-Status': 'HIT' | 'MISS';
+  'Cache-Control': string;
+  'X-Cache-Expires': string;
+}
+
+export interface ApiResponse<T> {
+  data: T;
+  cacheInfo?: {
+    hit: boolean;
+    timestamp: number;
+    expires: number;
+  };
+}
+
+/**
+ * Parse cache headers from response
+ */
+function parseCacheHeaders(headers: Headers): ApiResponse<any>['cacheInfo'] {
+  const cacheStatus = headers.get('X-Cache-Status');
+  const cacheControl = headers.get('Cache-Control');
+  const cacheExpires = headers.get('X-Cache-Expires');
+
+  if (!cacheStatus) return undefined;
+
+  return {
+    hit: cacheStatus === 'HIT',
+    timestamp: Date.now(),
+    expires: cacheExpires ? parseInt(cacheExpires, 10) : Date.now() + 300000 // 5 minutes default
+  };
+}
+
 /**
  * Privacy-focused API fetch function
  * - Ensures local-only access
@@ -30,7 +62,7 @@ export class ApiError extends Error {
 export async function fetchApi<T>(
   endpoint: string,
   options: FetchApiOptions = {}
-): Promise<T> {
+): Promise<ApiResponse<T>> {
   const { params, ...fetchOptions } = options;
 
   // Remove any leading slash and ensure endpoint doesn't start with BASE_URL
@@ -95,7 +127,9 @@ export async function fetchApi<T>(
     }
 
     const data = await response.json();
-    return data;
+    const cacheInfo = parseCacheHeaders(response.headers);
+
+    return { data, cacheInfo };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
