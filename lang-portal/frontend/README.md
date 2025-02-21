@@ -8,6 +8,19 @@
 ## Overview
 React frontend for the Language Learning Portal.
 
+## Dependencies
+
+### Core Dependencies
+- React
+- TypeScript
+- TailwindCSS
+
+### Monitoring & Visualization
+- `recharts` - Lightweight charting library for cache performance visualization
+  ```bash
+  npm install recharts
+  ```
+
 ## Setup
 1. Install dependencies:
    ```bash

@@ -2,7 +2,26 @@
 
 ## Overview
 
-This document details the implementation of cache monitoring and testing for the Language Learning Portal's caching system. The implementation includes comprehensive metrics collection, privacy controls, and thorough testing coverage.
+This document details the implementation of cache monitoring and testing for the Language Learning Portal's caching system. The implementation includes comprehensive metrics collection, privacy controls, thorough testing coverage, and real-time visualization.
+
+## Frontend Visualization
+
+### Dependencies
+- `recharts` - Lightweight charting library for cache performance visualization
+  ```bash
+  npm install recharts
+  ```
+
+### Features
+- Real-time metric updates (5-second intervals)
+- Trend visualization for:
+  - Cache hit rate
+  - Error rate
+  - Storage usage
+  - Compression ratio
+- Historical data tracking (1-minute window)
+- Dark mode support
+- Responsive design
 
 ## Cache Monitoring
 

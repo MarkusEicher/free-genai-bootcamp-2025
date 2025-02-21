@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../common/Card';
-import { useCache } from '../../contexts/CacheContext';
 import { cacheMonitor } from '../../utils/cacheMonitoring';
-import { cacheCompression } from '../../utils/cacheCompression';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface MetricCardProps {
   title: string;
@@ -53,21 +52,83 @@ interface CacheMetrics {
   compressionRatio: number;
 }
 
+interface MetricsHistory {
+  timestamp: number;
+  metrics: CacheMetrics;
+}
+
+interface MetricChartProps {
+  data: MetricsHistory[];
+  dataKey: keyof CacheMetrics;
+  color: string;
+  formatter?: (value: number) => string;
+}
+
+const MetricChart: React.FC<MetricChartProps> = ({ data, dataKey, color, formatter }) => (
+  <ResponsiveContainer width="100%" height={200}>
+    <LineChart data={data}>
+      <XAxis
+        dataKey="timestamp"
+        tickFormatter={(timestamp) => new Date(timestamp).toLocaleTimeString()}
+        style={{ fontSize: '12px' }}
+      />
+      <YAxis
+        tickFormatter={formatter}
+        width={40}
+        style={{ fontSize: '12px' }}
+      />
+      <Tooltip
+        formatter={(value: number) => [formatter ? formatter(value) : value, dataKey]}
+        labelFormatter={(timestamp) => new Date(Number(timestamp)).toLocaleTimeString()}
+      />
+      <Line
+        type="monotone"
+        dataKey={`metrics.${dataKey}`}
+        stroke={color}
+        strokeWidth={2}
+        dot={false}
+        isAnimationActive={false}
+      />
+    </LineChart>
+  </ResponsiveContainer>
+);
+
 export const CacheMonitoringDashboard: React.FC = () => {
-  const { getStorageStats } = useCache();
   const [metrics, setMetrics] = useState<CacheMetrics | null>(null);
+  const [metricsHistory, setMetricsHistory] = useState<MetricsHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const calculateTrend = (current: number, history: MetricsHistory[]): 'up' | 'down' | 'neutral' => {
+    if (history.length < 2) return 'neutral';
+    const previous = history[history.length - 1].metrics;
+    const threshold = 0.05; // 5% change threshold
+
+    // Find the matching metric from previous reading
+    const metricKeys = Object.keys(previous) as Array<keyof CacheMetrics>;
+    const matchingKey = metricKeys.find(key => Math.abs(previous[key] - current) < threshold);
+    
+    if (!matchingKey) return 'neutral';
+    
+    const change = (current - previous[matchingKey]) / previous[matchingKey];
+    return Math.abs(change) < threshold ? 'neutral' : change > 0 ? 'up' : 'down';
+  };
 
   useEffect(() => {
     const updateMetrics = async () => {
       try {
         const health = await cacheMonitor.getHealth();
-        setMetrics({
+        const newMetrics = {
           hitRate: health.hitRate,
           errorRate: health.errorRate,
           storageUsage: health.storageUsage,
           itemCount: health.itemCount,
           compressionRatio: health.compressionRatio
+        };
+
+        setMetrics(newMetrics);
+        setMetricsHistory(prev => {
+          const newHistory = [...prev, { timestamp: Date.now(), metrics: newMetrics }];
+          return newHistory.slice(-12); // Keep last 1 minute of history (12 * 5 seconds)
         });
       } catch (error) {
         console.error('Failed to fetch cache metrics:', error);
@@ -112,26 +173,73 @@ export const CacheMonitoringDashboard: React.FC = () => {
           title="Cache Hit Rate"
           value={`${(metrics.hitRate * 100).toFixed(1)}%`}
           description="Percentage of successful cache retrievals"
-          trend={metrics.hitRate > 0.8 ? 'up' : metrics.hitRate < 0.5 ? 'down' : 'neutral'}
+          trend={calculateTrend(metrics.hitRate, metricsHistory)}
         />
         <MetricCard
           title="Error Rate"
           value={`${(metrics.errorRate * 100).toFixed(1)}%`}
           description="Percentage of failed cache operations"
-          trend={metrics.errorRate > 0.1 ? 'down' : 'up'}
+          trend={calculateTrend(metrics.errorRate, metricsHistory)}
         />
         <MetricCard
           title="Storage Usage"
           value={`${(metrics.storageUsage / 1024 / 1024).toFixed(2)} MB`}
           description="Total cache storage consumption"
-          trend={metrics.storageUsage > 40 * 1024 * 1024 ? 'down' : 'neutral'}
+          trend={calculateTrend(metrics.storageUsage, metricsHistory)}
         />
         <MetricCard
           title="Compression Ratio"
           value={metrics.compressionRatio.toFixed(2)}
           description="Data compression efficiency"
-          trend={metrics.compressionRatio > 2 ? 'up' : 'neutral'}
+          trend={calculateTrend(metrics.compressionRatio, metricsHistory)}
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">
+            Hit Rate Trend
+          </h3>
+          <MetricChart
+            data={metricsHistory}
+            dataKey="hitRate"
+            color="#10B981"
+            formatter={(value) => `${(value * 100).toFixed(1)}%`}
+          />
+        </Card>
+        <Card className="p-4">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">
+            Error Rate Trend
+          </h3>
+          <MetricChart
+            data={metricsHistory}
+            dataKey="errorRate"
+            color="#EF4444"
+            formatter={(value) => `${(value * 100).toFixed(1)}%`}
+          />
+        </Card>
+        <Card className="p-4">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">
+            Storage Usage Trend
+          </h3>
+          <MetricChart
+            data={metricsHistory}
+            dataKey="storageUsage"
+            color="#6366F1"
+            formatter={(value) => `${(value / 1024 / 1024).toFixed(2)} MB`}
+          />
+        </Card>
+        <Card className="p-4">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">
+            Compression Ratio Trend
+          </h3>
+          <MetricChart
+            data={metricsHistory}
+            dataKey="compressionRatio"
+            color="#F59E0B"
+            formatter={(value) => value.toFixed(2)}
+          />
+        </Card>
       </div>
 
       <Card className="p-6">
@@ -175,6 +283,10 @@ export const CacheMonitoringDashboard: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        Last updated: {new Date().toLocaleTimeString()}
+      </div>
     </div>
   );
 }; 
