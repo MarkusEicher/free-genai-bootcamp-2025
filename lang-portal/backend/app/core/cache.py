@@ -215,6 +215,19 @@ class LocalCache:
             except (IOError, OSError):
                 return False
 
+    def _get_all_keys(self) -> Set[str]:
+        """Get all cache keys (for testing/monitoring)."""
+        keys = set()
+        for cache_file in self.cache_dir.glob("*.cache"):
+            try:
+                with open(cache_file, 'r') as f:
+                    data = json.load(f)
+                    if datetime.fromisoformat(data['expire_time']) > datetime.now():
+                        keys.add(cache_file.stem)
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
+        return keys
+
 # Create singleton instance
 cache = LocalCache.get_instance()
 
@@ -253,17 +266,41 @@ def cache_response(
             
             # Try to get from cache
             cached_response = cache.get(cache_key)
-            if cached_response is not None:
-                return cached_response
+            cache_hit = cached_response is not None
             
-            # Get fresh response
-            response = await func(*args, **kwargs)
+            if cache_hit:
+                response = cached_response
+            else:
+                try:
+                    # Get fresh response
+                    response = await func(*args, **kwargs)
+                    # Cache the response
+                    cache.set(cache_key, response, expire)
+                except Exception as e:
+                    # Don't cache errors
+                    raise e
             
-            # Cache the response
-            cache.set(cache_key, response, expire)
+            # Add cache-related headers if we have a request object
+            if args and hasattr(args[0], "headers"):
+                request = args[0]
+                headers = {
+                    "X-Cache-Status": "HIT" if cache_hit else "MISS",
+                    "Cache-Control": "no-store, no-cache",
+                    "X-Cache-Expires": str(expire),
+                }
+                
+                # Add headers to response
+                if hasattr(response, "headers"):
+                    response.headers.update(headers)
+                else:
+                    # Convert dict response to Response object
+                    from fastapi.responses import JSONResponse
+                    response = JSONResponse(
+                        content=response,
+                        headers=headers
+                    )
             
             return response
-        
         return wrapper
     return decorator
 

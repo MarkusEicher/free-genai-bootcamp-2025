@@ -2,7 +2,7 @@
 import pytest
 from datetime import datetime, UTC, timedelta
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from redis.exceptions import ConnectionError
