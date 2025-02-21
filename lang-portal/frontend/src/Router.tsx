@@ -4,6 +4,7 @@ import Dashboard from './pages/dashboard/Dashboard'
 import VocabularyPage from './pages/VocabularyPage'
 import PracticePage from './pages/PracticePage'
 import SettingsPage from './pages/SettingsPage'
+import { CacheMonitoringPage } from './pages/monitoring/CacheMonitoringPage'
 
 export default function Router() {
   return (
@@ -17,6 +18,7 @@ export default function Router() {
             <Route path="/vocabulary" element={<VocabularyPage />} />
             <Route path="/practice" element={<PracticePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/monitoring/cache" element={<CacheMonitoringPage />} />
           </Routes>
         </main>
       </div>

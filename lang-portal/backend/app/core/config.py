@@ -22,6 +22,11 @@ class Settings(BaseModel):
     # Cache configuration
     CACHE_DIR: str = os.path.join(BACKEND_DIR, "data", "cache")
     CACHE_DEFAULT_EXPIRE: int = 300  # 5 minutes
+    MAX_CACHE_SIZE: int = 50 * 1024 * 1024  # 50MB
+    MAX_ENTRY_SIZE: int = 1 * 1024 * 1024   # 1MB
+    CACHE_CLEANUP_THRESHOLD: float = 0.9  # 90% full triggers cleanup
+    CACHE_MONITOR_ENABLED: bool = True
+    CACHE_METRICS_WINDOW: int = 1000  # Number of response times to keep
     
     # Privacy settings
     COLLECT_METRICS: bool = False

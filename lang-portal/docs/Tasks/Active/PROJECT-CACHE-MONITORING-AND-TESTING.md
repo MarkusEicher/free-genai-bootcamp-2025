@@ -144,12 +144,17 @@ async def test_metrics_endpoint():
 ## 3. Implementation Tasks
 
 ### Backend Tasks
-1. [ ] Implement CacheMetrics class
-2. [ ] Add metrics collection to LocalCache
-3. [ ] Create metrics endpoints
-4. [ ] Add unit tests
-5. [ ] Add integration tests
-6. [ ] Update documentation
+1. [x] Implement CacheMetrics class
+2. [x] Add metrics collection to LocalCache
+3. [x] Create metrics endpoints
+4. [x] Add unit tests
+5. [x] Add integration tests
+6. [x] Update documentation
+
+```	
+ADMIN-EDIT 21-02-2025-14-10: 
+The backend team has completed all tasks under the section ### Backend Tasks
+```
 
 ### Frontend Tasks
 1. [ ] Create cache monitoring dashboard
