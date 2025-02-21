@@ -1,5 +1,8 @@
 import React, { useRef } from 'react';
 import { Card } from '../../../components/common/Card';
+import { CacheStatus } from '../../../components/common/CacheStatus';
+import { useCacheableQuery } from '../../../hooks/useCacheableQuery';
+import { dashboardApi } from '../../../api/dashboard';
 import type { LatestSession } from '../../../types/dashboard';
 
 interface SessionItemProps {
@@ -124,17 +127,53 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, index }) => {
 };
 
 interface DashboardLatestSessionsProps {
-  sessions?: LatestSession[];
+  className?: string;
 }
 
-export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = ({ sessions = [] }) => {
+export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = ({ className = '' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  if (!sessions) {
+  const {
+    data: sessions,
+    isLoading,
+    error,
+    isCacheHit,
+    cacheStatus,
+    refetch
+  } = useCacheableQuery<LatestSession[]>({
+    cacheKey: 'dashboard-latest-sessions',
+    queryFn: () => dashboardApi.getLatestSessions(5),
+    cacheDuration: 2 * 60 * 1000 // 2 minutes - shorter duration since this data changes frequently
+  });
+
+  if (error) {
+    return (
+      <Card className="p-6 bg-red-50 dark:bg-red-900/10">
+        <div className="text-red-800 dark:text-red-200">
+          Failed to load latest sessions
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+        >
+          Retry
+        </button>
+      </Card>
+    );
+  }
+
+  if (isLoading || !sessions) {
     return (
       <Card className="p-6">
-        <div className="text-center text-gray-700 dark:text-gray-300">
-          Loading sessions...
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="space-y-3">
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+            </div>
+          ))}
         </div>
       </Card>
     );
@@ -143,7 +182,11 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
   if (!Array.isArray(sessions) || sessions.length === 0) {
     return (
       <Card className="p-6">
-        <div className="text-center text-gray-700 dark:text-gray-300">
+        <div 
+          className="text-center text-gray-700 dark:text-gray-300"
+          role="status"
+          aria-live="polite"
+        >
           No recent sessions found
         </div>
       </Card>
@@ -151,11 +194,36 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
   }
 
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50 mb-4">
-        Latest Sessions
-      </h3>
-      <div className="space-y-4">
+    <Card className={`p-6 ${className}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 
+          className="text-lg font-semibold text-gray-900 dark:text-gray-50"
+          id="latest-sessions-title"
+        >
+          Latest Sessions
+        </h3>
+        <div className="flex items-center space-x-4">
+          <CacheStatus
+            isCacheHit={isCacheHit}
+            timestamp={cacheStatus?.timestamp}
+            expires={cacheStatus?.expires}
+          />
+          <button
+            onClick={() => refetch()}
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            aria-label="Refresh latest sessions"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div 
+        ref={containerRef}
+        className="space-y-4"
+        role="feed"
+        aria-labelledby="latest-sessions-title"
+      >
         {sessions.map((session, index) => (
           <SessionItem 
             key={`${session.activity_name}-${session.start_time}-${index}`}
