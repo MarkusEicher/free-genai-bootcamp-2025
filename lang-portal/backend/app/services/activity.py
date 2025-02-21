@@ -1,7 +1,10 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
+from datetime import datetime, timedelta
+import os
+import shutil
 
 from app.models.activity import Activity, Session as ActivitySession, SessionAttempt
 from app.models.vocabulary_group import VocabularyGroup
@@ -15,13 +18,16 @@ from app.schemas.activity import (
     ActivityProgressResponse
 )
 from app.services.base import BaseService
+from app.core.config import settings
 
 class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def __init__(self):
         super().__init__(Activity)
+        self.data_dir = os.path.join(settings.BACKEND_DIR, "data", "activities")
+        os.makedirs(self.data_dir, exist_ok=True)
 
     def create_with_validation(self, db: Session, *, obj_in: ActivityCreate) -> Activity:
-        """Create activity with additional validation."""
+        """Create activity with privacy controls and local storage setup."""
         if not obj_in.name.strip():
             raise HTTPException(status_code=422, detail="Activity name cannot be empty")
         if not obj_in.type.strip():
@@ -43,9 +49,18 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                 detail={"code": "VOCABULARY_GROUP_NOT_FOUND", "message": "One or more vocabulary groups not found"}
             )
         
-        # Create activity
+        # Create activity with privacy settings
         activity_data = obj_in.dict(exclude={'vocabulary_group_ids'})
+        activity_data.update({
+            'privacy_level': 'private',  # Default to private
+            'retention_days': 30,  # Default 30-day retention
+            'requires_sync': False  # Default to no sync required
+        })
+        
         db_obj = Activity(**activity_data)
+        
+        # Set up local storage
+        db_obj.get_local_storage_path()
         
         # Add groups
         for group in groups:
@@ -59,7 +74,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def update(
         self, db: Session, *, db_obj: Activity, obj_in: ActivityUpdate
     ) -> Activity:
-        """Update activity with vocabulary group handling."""
+        """Update activity with privacy considerations."""
         update_data = obj_in.dict(exclude_unset=True)
         
         # Handle vocabulary group updates
@@ -72,7 +87,6 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                         detail={"code": "EMPTY_GROUP_IDS", "message": "At least one vocabulary group must be specified"}
                     )
                 
-                # Verify all groups exist
                 groups = db.query(VocabularyGroup).filter(
                     VocabularyGroup.id.in_(group_ids)
                 ).all()
@@ -83,17 +97,96 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                         detail={"code": "VOCABULARY_GROUP_NOT_FOUND", "message": "One or more vocabulary groups not found"}
                     )
                 
-                # Update groups
                 db_obj.vocabulary_groups = groups
+        
+        # Update privacy-related fields
+        if 'privacy_level' in update_data:
+            db_obj.privacy_level = update_data.pop('privacy_level')
+        if 'retention_days' in update_data:
+            db_obj.retention_days = update_data.pop('retention_days')
+            db_obj.update_deletion_schedule()
         
         # Update other fields
         for field, value in update_data.items():
             setattr(db_obj, field, value)
         
+        db_obj.update_last_accessed()
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
+
+    def delete(self, db: Session, *, id: int) -> Activity:
+        """Delete activity and its local data."""
+        obj = db.get(self.model, id)
+        if not obj:
+            raise HTTPException(status_code=404, detail=f"{self.model.__name__} not found")
+        
+        # Clean up local storage
+        if obj.local_storage_path and os.path.exists(obj.local_storage_path):
+            shutil.rmtree(obj.local_storage_path)
+        
+        db.delete(obj)
+        db.commit()
+        return obj
+
+    def cleanup_expired_activities(self, db: Session) -> int:
+        """Clean up expired activities based on retention period."""
+        now = datetime.utcnow()
+        expired = db.query(Activity).filter(
+            Activity.scheduled_deletion_at <= now
+        ).all()
+        
+        cleaned = 0
+        for activity in expired:
+            activity.cleanup_local_data()
+            db.delete(activity)
+            cleaned += 1
+        
+        if cleaned > 0:
+            db.commit()
+        
+        return cleaned
+
+    def get_with_local_data(self, db: Session, *, id: int) -> Optional[Dict]:
+        """Get activity with its local data."""
+        activity = self.get(db, id=id)
+        if not activity:
+            return None
+        
+        # Update access time
+        activity.update_last_accessed()
+        db.add(activity)
+        db.commit()
+        
+        # Get base activity data
+        data = activity.to_dict(include_private=True)
+        
+        # Add local data if available
+        local_data = activity.load_local_data()
+        if local_data:
+            data['local_data'] = local_data
+        
+        return data
+
+    def save_activity_data(self, db: Session, *, id: int, data: Dict) -> bool:
+        """Save activity-specific data to local storage."""
+        activity = self.get(db, id=id)
+        if not activity:
+            return False
+        
+        try:
+            activity.save_local_data(data)
+            activity.update_last_accessed()
+            db.add(activity)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to save activity data: {str(e)}"
+            )
 
     def get_practice_vocabulary(self, db: Session, activity: Activity) -> List[dict]:
         """Get practice vocabulary for an activity."""

@@ -1,8 +1,13 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Index, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+from sqlalchemy.dialects.postgresql import JSONB
 from app.db.base_class import Base
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
+import json
+import os
+
 from app.models.associations import activity_vocabulary_group
 
 # Add indexes to the activity_vocabulary_group table
@@ -17,6 +22,7 @@ class Activity(Base):
         Index('ix_activities_created_at', 'created_at'),
         Index('ix_activities_name', 'name'),
         Index('ix_activities_practice_direction', 'practice_direction'),
+        Index('ix_activities_privacy_level', 'privacy_level'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -24,8 +30,22 @@ class Activity(Base):
     name = Column(String, nullable=False)
     description = Column(String)
     practice_direction = Column(String, nullable=False, server_default='forward')
+    
+    # Privacy-focused fields
+    privacy_level = Column(String, nullable=False, server_default='private',
+                          comment='private, shared, or public')
+    retention_days = Column(Integer, nullable=False, server_default='30',
+                          comment='Number of days to retain activity data')
+    local_storage_path = Column(String, nullable=True,
+                              comment='Path to local storage for offline data')
+    requires_sync = Column(Boolean, nullable=False, server_default='false',
+                          comment='Whether this activity needs sync with server')
+    
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_accessed_at = Column(DateTime(timezone=True), nullable=True)
+    scheduled_deletion_at = Column(DateTime(timezone=True), nullable=True)
 
     sessions = relationship(
         "Session",
@@ -41,6 +61,89 @@ class Activity(Base):
         lazy="selectin",  # Eager load groups for better performance
         order_by="VocabularyGroup.name"  # Order groups by name
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.update_deletion_schedule()
+
+    def update_deletion_schedule(self) -> None:
+        """Update the scheduled deletion date based on retention period."""
+        if self.retention_days:
+            self.scheduled_deletion_at = datetime.utcnow() + timedelta(days=self.retention_days)
+
+    def update_last_accessed(self) -> None:
+        """Update the last accessed timestamp."""
+        self.last_accessed_at = datetime.utcnow()
+
+    def get_local_storage_path(self) -> Optional[str]:
+        """Get the path for local storage, creating if necessary."""
+        if not self.local_storage_path and self.id:
+            base_path = os.path.join('data', 'activities', str(self.id))
+            os.makedirs(base_path, exist_ok=True)
+            self.local_storage_path = base_path
+        return self.local_storage_path
+
+    def sanitize_data(self, data: Dict) -> Dict:
+        """Sanitize activity data for privacy."""
+        sensitive_fields = {'user_id', 'ip_address', 'session_id', 'device_info'}
+        return {k: v for k, v in data.items() if k not in sensitive_fields}
+
+    def to_dict(self, include_private: bool = False) -> Dict:
+        """Convert activity to dictionary with privacy controls."""
+        data = {
+            'id': self.id,
+            'type': self.type,
+            'name': self.name,
+            'description': self.description,
+            'practice_direction': self.practice_direction,
+            'privacy_level': self.privacy_level,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+        
+        if include_private:
+            data.update({
+                'retention_days': self.retention_days,
+                'local_storage_path': self.local_storage_path,
+                'requires_sync': self.requires_sync,
+                'last_accessed_at': self.last_accessed_at.isoformat() if self.last_accessed_at else None,
+                'scheduled_deletion_at': self.scheduled_deletion_at.isoformat() if self.scheduled_deletion_at else None,
+            })
+        
+        return data
+
+    def save_local_data(self, data: Dict) -> None:
+        """Save activity data to local storage."""
+        if not self.local_storage_path:
+            self.get_local_storage_path()
+        
+        sanitized_data = self.sanitize_data(data)
+        file_path = os.path.join(self.local_storage_path, 'activity_data.json')
+        
+        with open(file_path, 'w') as f:
+            json.dump(sanitized_data, f)
+
+    def load_local_data(self) -> Optional[Dict]:
+        """Load activity data from local storage."""
+        if not self.local_storage_path:
+            return None
+            
+        file_path = os.path.join(self.local_storage_path, 'activity_data.json')
+        if not os.path.exists(file_path):
+            return None
+            
+        with open(file_path, 'r') as f:
+            return json.load(f)
+
+    def cleanup_local_data(self) -> None:
+        """Clean up local data if retention period has expired."""
+        if not self.local_storage_path:
+            return
+            
+        if self.scheduled_deletion_at and datetime.utcnow() >= self.scheduled_deletion_at:
+            import shutil
+            shutil.rmtree(self.local_storage_path, ignore_errors=True)
+            self.local_storage_path = None
 
     def get_practice_vocabulary(self) -> list:
         """Get vocabulary items in correct practice direction."""
