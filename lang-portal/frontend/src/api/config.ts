@@ -3,7 +3,7 @@
  * Privacy-focused API configuration that ensures local-only access
  */
 
-import { API_VERSION, BASE_URL } from './constants';
+import { BASE_URL } from './constants';
 
 interface FetchApiOptions extends RequestInit {
   params?: Record<string, any>;
@@ -20,12 +20,6 @@ export class ApiError extends Error {
   }
 }
 
-interface CacheHeaders {
-  'X-Cache-Status': 'HIT' | 'MISS';
-  'Cache-Control': string;
-  'X-Cache-Expires': string;
-}
-
 export interface ApiResponse<T> {
   data: T;
   cacheInfo?: {
@@ -35,12 +29,21 @@ export interface ApiResponse<T> {
   };
 }
 
+interface ValidationError {
+  loc: string[];
+  msg: string;
+  type: string;
+  ctx?: {
+    received?: any;
+    expected?: any;
+  };
+}
+
 /**
  * Parse cache headers from response
  */
 function parseCacheHeaders(headers: Headers): ApiResponse<any>['cacheInfo'] {
   const cacheStatus = headers.get('X-Cache-Status');
-  const cacheControl = headers.get('Cache-Control');
   const cacheExpires = headers.get('X-Cache-Expires');
 
   if (!cacheStatus) return undefined;
@@ -63,88 +66,97 @@ export async function fetchApi<T>(
   endpoint: string,
   options: FetchApiOptions = {}
 ): Promise<ApiResponse<T>> {
-  const { params, ...fetchOptions } = options;
-
-  // Remove any leading slash and ensure endpoint doesn't start with BASE_URL
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-  const finalEndpoint = cleanEndpoint.startsWith('api/v1/') ? cleanEndpoint : `api/v1/${cleanEndpoint}`;
+  const url = new URL(`${BASE_URL}/${endpoint}`, window.location.origin);
   
-  // Ensure we're only making requests to localhost
-  const url = new URL(finalEndpoint, window.location.origin);
-  if (!url.hostname.match(/^(localhost|127\.0\.0\.1)$/)) {
-    throw new ApiError('Only local connections are allowed', 403);
-  }
-
-  // Filter out any sensitive or tracking-related parameters
-  const filteredParams = params ? filterSensitiveParams(params) : {};
-  
-  // Add filtered parameters to URL
-  if (Object.keys(filteredParams).length > 0) {
-    Object.entries(filteredParams).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        url.searchParams.append(key, value.toString());
-      }
+  // Add query parameters if provided
+  if (options.params) {
+    Object.entries(filterSensitiveParams(options.params)).forEach(([key, value]) => {
+      url.searchParams.append(key, String(value));
     });
   }
 
   try {
     const response = await fetch(url.toString(), {
-      ...fetchOptions,
-      // Ensure privacy-focused headers
+      ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-Privacy-Mode': 'strict',
-        ...fetchOptions.headers,
+        ...options.headers,
       },
-      // Prevent credentials and cookies
-      credentials: 'omit',
-      cache: 'no-store',
-      mode: 'same-origin',
-      referrerPolicy: 'strict-origin-when-cross-origin',
     });
 
+    // Parse cache headers
+    const cacheInfo = parseCacheHeaders(response.headers);
+
     if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { detail: 'An unknown error occurred' };
+      const errorData = await response.json().catch(() => null);
+      
+      // Enhanced error logging for validation errors
+      if (response.status === 422) {
+        const validationErrors = errorData?.detail || [];
+        console.error('Validation Error:', {
+          status: response.status,
+          endpoint: url.pathname,
+          method: options.method || 'GET',
+          params: options.params || {},
+          errors: Array.isArray(validationErrors) ? validationErrors : [validationErrors],
+          rawResponse: errorData,
+          timestamp: new Date().toISOString()
+        });
+
+        // Log each validation error separately for better debugging
+        if (Array.isArray(validationErrors)) {
+          validationErrors.forEach((error: ValidationError, index: number) => {
+            console.error(`Validation Error ${index + 1}:`, {
+              field: error.loc?.join('.'),
+              message: error.msg,
+              type: error.type,
+              received: error.ctx?.received,
+              expected: error.ctx?.expected
+            });
+          });
+        }
+      } else {
+        console.error('API Error:', {
+          status: response.status,
+          endpoint: url.pathname,
+          method: options.method || 'GET',
+          message: errorData?.detail || 'Unknown error',
+          rawError: errorData,
+          timestamp: new Date().toISOString()
+        });
       }
 
-      // Log error without sensitive information
-      console.error('API Error:', {
-        status: response.status,
-        endpoint: url.pathname,
-        timestamp: new Date().toISOString()
-      });
-
       throw new ApiError(
-        errorData.detail || 'An error occurred',
+        Array.isArray(errorData?.detail) 
+          ? errorData.detail.map((e: ValidationError) => e.msg).join('; ')
+          : errorData?.detail || 'An error occurred',
         response.status,
         errorData
       );
     }
 
     const data = await response.json();
-    const cacheInfo = parseCacheHeaders(response.headers);
-
     return { data, cacheInfo };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
     }
-
-    // Log error without sensitive information
-    console.error('Fetch error:', {
+    
+    console.error('Network Error:', {
       endpoint: url.pathname,
+      method: options.method || 'GET',
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : 'Unknown error',
       timestamp: new Date().toISOString()
     });
     
     throw new ApiError(
       'Failed to fetch data',
       500,
-      error instanceof Error ? error.message : 'Unknown error'
+      { error: error instanceof Error ? error.message : 'Unknown error' }
     );
   }
 }

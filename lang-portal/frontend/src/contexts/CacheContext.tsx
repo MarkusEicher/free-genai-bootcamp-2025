@@ -1,62 +1,69 @@
-import React, { createContext, useContext, useCallback, useState, useEffect } from 'react';
-import { cacheCompression } from '../utils/cacheCompression';
-import { cacheMonitor } from '../utils/cacheMonitoring';
-
-interface CacheInfo {
-  hit: boolean;
-  timestamp: number;
-  expires: number;
-}
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 interface CacheData {
   data: any;
-  cacheInfo: CacheInfo;
+  cacheInfo: {
+    hit: boolean;
+    timestamp: number;
+    expires: number;
+  };
 }
 
 interface CacheContextType {
   getCacheItem: (key: string) => Promise<CacheData | null>;
   setCacheItem: (key: string, data: any, expires: number) => Promise<void>;
-  invalidateCache: (pattern?: string) => Promise<void>;
+  getCacheStatus: (key: string) => Promise<{ timestamp: number; expires: number } | null>;
   clearCache: () => Promise<void>;
-  getCacheStatus: (key: string) => Promise<CacheInfo | null>;
-  getStorageStats: () => Promise<{ usage: number; quota: number }>;
 }
 
 const CacheContext = createContext<CacheContextType | undefined>(undefined);
 
 const STORAGE_PREFIX = 'lang_portal_cache_';
-const MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB default max size
+const MAX_CACHE_SIZE = 10 * 1024 * 1024; // 10MB max size
 
 export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cacheSize, setCacheSize] = useState<number>(0);
 
-  // Monitor cache health periodically
+  // Initialize cache and check version on mount
   useEffect(() => {
-    const interval = setInterval(() => {
-      cacheMonitor.logHealth();
-    }, 60000); // Log health every minute in development
+    const CACHE_VERSION = '1.0';
+    const CACHE_VERSION_KEY = 'lang_portal_cache_version';
+    
+    const currentVersion = localStorage.getItem(CACHE_VERSION_KEY);
+    if (!currentVersion || currentVersion !== CACHE_VERSION) {
+      // Clear old cache data
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith(STORAGE_PREFIX)) {
+          localStorage.removeItem(key);
+        }
+      });
+      localStorage.setItem(CACHE_VERSION_KEY, CACHE_VERSION);
+    }
 
-    return () => clearInterval(interval);
+    // Calculate initial cache size
+    let size = 0;
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith(STORAGE_PREFIX)) {
+        size += new Blob([localStorage.getItem(key) || '']).size;
+      }
+    });
+    setCacheSize(size);
   }, []);
 
   const getCacheItem = useCallback(async (key: string): Promise<CacheData | null> => {
     try {
       const item = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
-      if (!item) {
-        cacheMonitor.recordMiss();
-        return null;
-      }
+      if (!item) return null;
 
-      const { data, timestamp, expires } = cacheCompression.decompress(item);
+      const { data, timestamp, expires } = JSON.parse(item);
       const now = Date.now();
 
       if (expires && now > expires) {
         localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
-        cacheMonitor.recordMiss();
         return null;
       }
 
-      cacheMonitor.recordHit();
       return {
         data,
         cacheInfo: {
@@ -67,7 +74,6 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     } catch (error) {
       console.error('Cache read error:', error);
-      cacheMonitor.recordError();
       return null;
     }
   }, []);
@@ -80,109 +86,66 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         expires
       };
 
-      // Check if compression should be applied
-      const shouldCompress = cacheCompression.shouldCompress(cacheData);
-      const serializedData = shouldCompress
-        ? cacheCompression.compress(cacheData)
-        : JSON.stringify(cacheData);
-
-      // Check cache size before storing
+      const serializedData = JSON.stringify(cacheData);
       const dataSize = new Blob([serializedData]).size;
 
+      // Check cache size and clear old items if needed
       if (dataSize + cacheSize > MAX_CACHE_SIZE) {
-        await cleanCache();
+        const keys = Object.keys(localStorage)
+          .filter(k => k.startsWith(STORAGE_PREFIX))
+          .sort((a, b) => {
+            const aData = JSON.parse(localStorage.getItem(a) || '{}');
+            const bData = JSON.parse(localStorage.getItem(b) || '{}');
+            return (aData.timestamp || 0) - (bData.timestamp || 0);
+          });
+
+        let newSize = cacheSize;
+        for (const k of keys) {
+          if (newSize + dataSize <= MAX_CACHE_SIZE) break;
+          const itemSize = new Blob([localStorage.getItem(k) || '']).size;
+          localStorage.removeItem(k);
+          newSize -= itemSize;
+        }
+        setCacheSize(newSize);
       }
 
       localStorage.setItem(`${STORAGE_PREFIX}${key}`, serializedData);
       setCacheSize(prev => prev + dataSize);
     } catch (error) {
       console.error('Cache write error:', error);
-      cacheMonitor.recordError();
-      throw new Error('Failed to store in cache');
     }
   }, [cacheSize]);
 
-  const cleanCache = useCallback(async (): Promise<void> => {
-    const keys = Object.keys(localStorage).filter(key => key.startsWith(STORAGE_PREFIX));
-    const now = Date.now();
-    let newSize = 0;
-
-    // Remove expired items first
-    for (const key of keys) {
-      try {
-        const item = localStorage.getItem(key);
-        if (!item) continue;
-
-        const decompressed = cacheCompression.decompress(item);
-        const { expires } = decompressed;
-
-        if (expires && now > expires) {
-          localStorage.removeItem(key);
-        } else {
-          newSize += new Blob([item]).size;
-        }
-      } catch (error) {
-        console.error('Cache cleanup error:', error);
-        localStorage.removeItem(key);
-      }
-    }
-
-    setCacheSize(newSize);
-  }, []);
-
-  const invalidateCache = useCallback(async (pattern?: string): Promise<void> => {
-    const keys = Object.keys(localStorage).filter(key => 
-      key.startsWith(STORAGE_PREFIX) && 
-      (!pattern || key.includes(pattern))
-    );
-
-    keys.forEach(key => localStorage.removeItem(key));
-    await cleanCache();
-  }, [cleanCache]);
-
-  const clearCache = useCallback(async (): Promise<void> => {
-    const keys = Object.keys(localStorage).filter(key => key.startsWith(STORAGE_PREFIX));
-    keys.forEach(key => localStorage.removeItem(key));
-    setCacheSize(0);
-    cacheMonitor.resetMetrics();
-  }, []);
-
-  const getCacheStatus = useCallback(async (key: string): Promise<CacheInfo | null> => {
+  const getCacheStatus = useCallback(async (key: string) => {
     try {
       const item = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
       if (!item) return null;
 
-      const { timestamp, expires } = cacheCompression.decompress(item);
-      return {
-        hit: true,
-        timestamp,
-        expires
-      };
+      const { timestamp, expires } = JSON.parse(item);
+      return { timestamp, expires };
     } catch (error) {
-      console.error('Cache status error:', error);
+      console.error('Failed to get cache status:', error);
       return null;
     }
   }, []);
 
-  const getStorageStats = useCallback(async () => {
-    const stats = cacheCompression.getStorageStats();
-    return {
-      usage: stats.totalSize,
-      quota: MAX_CACHE_SIZE
-    };
+  const clearCache = useCallback(async () => {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith(STORAGE_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    });
+    setCacheSize(0);
   }, []);
 
-  const value = {
-    getCacheItem,
-    setCacheItem,
-    invalidateCache,
-    clearCache,
-    getCacheStatus,
-    getStorageStats
-  };
-
   return (
-    <CacheContext.Provider value={value}>
+    <CacheContext.Provider value={{
+      getCacheItem,
+      setCacheItem,
+      getCacheStatus,
+      clearCache
+    }}>
       {children}
     </CacheContext.Provider>
   );
@@ -190,7 +153,7 @@ export const CacheProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 export const useCache = () => {
   const context = useContext(CacheContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useCache must be used within a CacheProvider');
   }
   return context;

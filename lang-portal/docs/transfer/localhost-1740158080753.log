@@ -1,0 +1,100 @@
+config.ts:91 
+            
+            
+           GET http://localhost:3000/api/v1/dashboard/stats 422 (Unprocessable Entity)
+fetchApi @ config.ts:91
+getDashboardStats @ dashboard.ts:27
+fetchFn @ @tanstack_react-query.js?v=b8ed2454:842
+run @ @tanstack_react-query.js?v=b8ed2454:493
+start @ @tanstack_react-query.js?v=b8ed2454:535
+fetch @ @tanstack_react-query.js?v=b8ed2454:929
+executeFetch_fn @ @tanstack_react-query.js?v=b8ed2454:2243
+onSubscribe @ @tanstack_react-query.js?v=b8ed2454:1930
+subscribe @ @tanstack_react-query.js?v=b8ed2454:24
+(anonymous) @ @tanstack_react-query.js?v=b8ed2454:3056
+subscribeToStore @ chunk-SXRIVT2P.js?v=b8ed2454:12032
+commitHookEffectListMount @ chunk-SXRIVT2P.js?v=b8ed2454:16963
+commitPassiveMountOnFiber @ chunk-SXRIVT2P.js?v=b8ed2454:18206
+commitPassiveMountEffects_complete @ chunk-SXRIVT2P.js?v=b8ed2454:18179
+commitPassiveMountEffects_begin @ chunk-SXRIVT2P.js?v=b8ed2454:18169
+commitPassiveMountEffects @ chunk-SXRIVT2P.js?v=b8ed2454:18159
+flushPassiveEffectsImpl @ chunk-SXRIVT2P.js?v=b8ed2454:19543
+flushPassiveEffects @ chunk-SXRIVT2P.js?v=b8ed2454:19500
+(anonymous) @ chunk-SXRIVT2P.js?v=b8ed2454:19381
+workLoop @ chunk-SXRIVT2P.js?v=b8ed2454:197
+flushWork @ chunk-SXRIVT2P.js?v=b8ed2454:176
+performWorkUntilDeadline @ chunk-SXRIVT2P.js?v=b8ed2454:384
+config.ts:116 API Error: {status: 422, endpoint: '/api/v1/dashboard/stats', timestamp: '2025-02-21T17:14:23.683Z'}
+overrideMethod @ hook.js:608
+fetchApi @ config.ts:116
+await in fetchApi
+getDashboardStats @ dashboard.ts:27
+fetchFn @ @tanstack_react-query.js?v=b8ed2454:842
+run @ @tanstack_react-query.js?v=b8ed2454:493
+start @ @tanstack_react-query.js?v=b8ed2454:535
+fetch @ @tanstack_react-query.js?v=b8ed2454:929
+executeFetch_fn @ @tanstack_react-query.js?v=b8ed2454:2243
+onSubscribe @ @tanstack_react-query.js?v=b8ed2454:1930
+subscribe @ @tanstack_react-query.js?v=b8ed2454:24
+(anonymous) @ @tanstack_react-query.js?v=b8ed2454:3056
+subscribeToStore @ chunk-SXRIVT2P.js?v=b8ed2454:12032
+commitHookEffectListMount @ chunk-SXRIVT2P.js?v=b8ed2454:16963
+commitPassiveMountOnFiber @ chunk-SXRIVT2P.js?v=b8ed2454:18206
+commitPassiveMountEffects_complete @ chunk-SXRIVT2P.js?v=b8ed2454:18179
+commitPassiveMountEffects_begin @ chunk-SXRIVT2P.js?v=b8ed2454:18169
+commitPassiveMountEffects @ chunk-SXRIVT2P.js?v=b8ed2454:18159
+flushPassiveEffectsImpl @ chunk-SXRIVT2P.js?v=b8ed2454:19543
+flushPassiveEffects @ chunk-SXRIVT2P.js?v=b8ed2454:19500
+(anonymous) @ chunk-SXRIVT2P.js?v=b8ed2454:19381
+workLoop @ chunk-SXRIVT2P.js?v=b8ed2454:197
+flushWork @ chunk-SXRIVT2P.js?v=b8ed2454:176
+performWorkUntilDeadline @ chunk-SXRIVT2P.js?v=b8ed2454:384
+dashboard.ts:29 Failed to fetch dashboard stats: ApiError: [object Object],[object Object]
+    at fetchApi (config.ts:122:13)
+    at async getDashboardStats (dashboard.ts:27:14)
+overrideMethod @ hook.js:608
+getDashboardStats @ dashboard.ts:29
+await in getDashboardStats
+fetchFn @ @tanstack_react-query.js?v=b8ed2454:842
+run @ @tanstack_react-query.js?v=b8ed2454:493
+start @ @tanstack_react-query.js?v=b8ed2454:535
+fetch @ @tanstack_react-query.js?v=b8ed2454:929
+executeFetch_fn @ @tanstack_react-query.js?v=b8ed2454:2243
+onSubscribe @ @tanstack_react-query.js?v=b8ed2454:1930
+subscribe @ @tanstack_react-query.js?v=b8ed2454:24
+(anonymous) @ @tanstack_react-query.js?v=b8ed2454:3056
+subscribeToStore @ chunk-SXRIVT2P.js?v=b8ed2454:12032
+commitHookEffectListMount @ chunk-SXRIVT2P.js?v=b8ed2454:16963
+commitPassiveMountOnFiber @ chunk-SXRIVT2P.js?v=b8ed2454:18206
+commitPassiveMountEffects_complete @ chunk-SXRIVT2P.js?v=b8ed2454:18179
+commitPassiveMountEffects_begin @ chunk-SXRIVT2P.js?v=b8ed2454:18169
+commitPassiveMountEffects @ chunk-SXRIVT2P.js?v=b8ed2454:18159
+flushPassiveEffectsImpl @ chunk-SXRIVT2P.js?v=b8ed2454:19543
+flushPassiveEffects @ chunk-SXRIVT2P.js?v=b8ed2454:19500
+(anonymous) @ chunk-SXRIVT2P.js?v=b8ed2454:19381
+workLoop @ chunk-SXRIVT2P.js?v=b8ed2454:197
+flushWork @ chunk-SXRIVT2P.js?v=b8ed2454:176
+performWorkUntilDeadline @ chunk-SXRIVT2P.js?v=b8ed2454:384
+config.ts:91 Fetch failed loading: GET "http://localhost:3000/api/v1/dashboard/stats".
+fetchApi @ config.ts:91
+getDashboardStats @ dashboard.ts:27
+fetchFn @ @tanstack_react-query.js?v=b8ed2454:842
+run @ @tanstack_react-query.js?v=b8ed2454:493
+start @ @tanstack_react-query.js?v=b8ed2454:535
+fetch @ @tanstack_react-query.js?v=b8ed2454:929
+executeFetch_fn @ @tanstack_react-query.js?v=b8ed2454:2243
+onSubscribe @ @tanstack_react-query.js?v=b8ed2454:1930
+subscribe @ @tanstack_react-query.js?v=b8ed2454:24
+(anonymous) @ @tanstack_react-query.js?v=b8ed2454:3056
+subscribeToStore @ chunk-SXRIVT2P.js?v=b8ed2454:12032
+commitHookEffectListMount @ chunk-SXRIVT2P.js?v=b8ed2454:16963
+commitPassiveMountOnFiber @ chunk-SXRIVT2P.js?v=b8ed2454:18206
+commitPassiveMountEffects_complete @ chunk-SXRIVT2P.js?v=b8ed2454:18179
+commitPassiveMountEffects_begin @ chunk-SXRIVT2P.js?v=b8ed2454:18169
+commitPassiveMountEffects @ chunk-SXRIVT2P.js?v=b8ed2454:18159
+flushPassiveEffectsImpl @ chunk-SXRIVT2P.js?v=b8ed2454:19543
+flushPassiveEffects @ chunk-SXRIVT2P.js?v=b8ed2454:19500
+(anonymous) @ chunk-SXRIVT2P.js?v=b8ed2454:19381
+workLoop @ chunk-SXRIVT2P.js?v=b8ed2454:197
+flushWork @ chunk-SXRIVT2P.js?v=b8ed2454:176
+performWorkUntilDeadline @ chunk-SXRIVT2P.js?v=b8ed2454:384

@@ -1,6 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from sqlalchemy.orm import Session
+import time
+from datetime import datetime, timedelta
+import logging
 
 from app.db.database import get_db
 from app.services.dashboard import dashboard_service
@@ -11,16 +14,84 @@ from app.schemas.dashboard import (
 )
 from app.core.cache import cache_response
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
-@router.get("/stats")
-async def get_dashboard_stats():
-    """Get dashboard statistics."""
-    return {
-        "total_words": 0,
-        "total_sessions": 0,
-        "success_rate": 0
+# Rate limiting settings
+RATE_LIMIT_REQUESTS = 60  # requests per minute
+RATE_LIMIT_WINDOW = 60  # seconds
+request_timestamps = {}
+
+def check_rate_limit(request: Request):
+    """Check if request is within rate limits."""
+    now = time.time()
+    client = request.client.host
+    
+    # Clean old timestamps
+    request_timestamps[client] = [ts for ts in request_timestamps.get(client, [])
+                                if now - ts < RATE_LIMIT_WINDOW]
+    
+    # Check rate limit
+    if len(request_timestamps.get(client, [])) >= RATE_LIMIT_REQUESTS:
+        logger.warning(f"Rate limit exceeded for {client}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
+    
+    # Add current timestamp
+    request_timestamps.setdefault(client, []).append(now)
+
+@router.get(
+    "/stats",
+    response_model=DashboardStats,
+    summary="Get Dashboard Statistics",
+    description="""
+    Retrieve overall dashboard statistics including:
+    - Success rate across all activities
+    - Total number of study sessions
+    - Number of active activities
+    - Number of active vocabulary groups
+    - Current and longest study streaks
+    
+    Response is cached for 5 minutes.
+    """,
+    response_description="Dashboard statistics",
+    responses={
+        200: {
+            "description": "Successfully retrieved dashboard statistics",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success_rate": 0.75,
+                        "study_sessions_count": 100,
+                        "active_activities_count": 5,
+                        "active_groups_count": 3,
+                        "study_streak": {
+                            "current_streak": 7,
+                            "longest_streak": 14
+                        }
+                    }
+                }
+            }
+        }
     }
+)
+@cache_response(prefix="dashboard:stats", expire=300)
+async def get_dashboard_stats(request: Request, db: Session = Depends(get_db)):
+    """Get dashboard statistics with rate limiting."""
+    try:
+        check_rate_limit(request)
+        return dashboard_service.get_stats(db)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in get_dashboard_stats: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
 
 @router.get(
     "/progress",
@@ -57,8 +128,18 @@ async def get_dashboard_stats():
 )
 @cache_response(prefix="dashboard:progress", expire=300)
 async def get_dashboard_progress(request: Request, db: Session = Depends(get_db)):
-    """Get learning progress statistics."""
-    return dashboard_service.get_progress(db)
+    """Get learning progress with rate limiting."""
+    try:
+        check_rate_limit(request)
+        return dashboard_service.get_progress(db)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in get_dashboard_progress: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
 
 @router.get(
     "/latest-sessions",
@@ -123,5 +204,15 @@ async def get_latest_sessions(
     ),
     db: Session = Depends(get_db)
 ):
-    """Get the most recent study sessions."""
-    return dashboard_service.get_latest_sessions(db, limit=limit)
+    """Get latest sessions with rate limiting."""
+    try:
+        check_rate_limit(request)
+        return dashboard_service.get_latest_sessions(db, limit)
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in get_latest_sessions: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
