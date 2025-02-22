@@ -1,8 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { Card } from '../../../components/common/Card';
-import { CacheStatus } from '../../../components/common/CacheStatus';
-import { useCacheableQuery } from '../../../hooks/useCacheableQuery';
-import { dashboardApi } from '../../../api/dashboard';
 import type { DashboardProgress as DashboardProgressType } from '../../../types/dashboard';
 
 interface ProgressBarProps {
@@ -12,235 +9,105 @@ interface ProgressBarProps {
   showLabel?: boolean;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ 
-  percentage, 
-  label, 
-  color = 'var(--color-primary-600)',
-  showLabel = true
-}) => {
-  const width = Math.max(0, Math.min(100, percentage));
-  const progressRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    // Announce progress changes to screen readers
-    const progressBar = progressRef.current;
-    if (progressBar) {
-      progressBar.setAttribute('aria-valuenow', width.toString());
-    }
-  }, [width]);
-
-  return (
-    <div className="relative pt-1">
-      {showLabel && (
-        <div className="flex items-center justify-between">
-          <div>
-            <span 
-              className="text-sm font-medium text-gray-900 dark:text-gray-400"
-              id={`progress-label-${label.toLowerCase().replace(/\s+/g, '-')}`}
-            >
-              {label}
-            </span>
-          </div>
-          <div 
-            className="text-sm text-gray-700 dark:text-gray-400"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {width.toFixed(1)}%
-          </div>
-        </div>
-      )}
-      <div className="mt-2">
-        <div 
-          ref={progressRef}
-          role="progressbar" 
-          aria-valuenow={width} 
-          aria-valuemin={0} 
-          aria-valuemax={100}
-          aria-label={`${label}: ${width.toFixed(1)}%`}
-          aria-labelledby={showLabel ? `progress-label-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined}
-          className="relative h-4 w-full bg-gray-200 dark:bg-gray-700 rounded"
-          tabIndex={0}
-        >
-          <div
-            style={{ width: `${width}%`, backgroundColor: color }}
-            className="absolute h-full rounded transition-all duration-300 ease-in-out"
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
 interface DashboardProgressProps {
+  progress: DashboardProgressType;
   className?: string;
 }
 
-export const DashboardProgress: React.FC<DashboardProgressProps> = ({ className = '' }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  const {
-    data: progress,
-    isLoading,
-    error,
-    isCacheHit,
-    cacheStatus,
-    refetch
-  } = useCacheableQuery<DashboardProgressType>({
-    cacheKey: 'dashboard-progress',
-    queryFn: dashboardApi.getDashboardProgress,
-    cacheDuration: 5 * 60 * 1000 // 5 minutes
-  });
-
-  useEffect(() => {
-    // Ensure proper focus management
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        const progressBar = container.querySelector('[role="progressbar"]');
-        if (progressBar instanceof HTMLElement) {
-          progressBar.focus();
-        }
-      }
-    };
-
-    container.addEventListener('keydown', handleKeyDown);
-    return () => container.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  if (error) {
-    return (
-      <Card className="p-6 bg-red-50 dark:bg-red-900/10">
-        <div className="text-red-800 dark:text-red-200">
-          Failed to load progress data
+const ProgressBar: React.FC<ProgressBarProps> = ({
+  percentage,
+  label,
+  color = 'bg-primary-600',
+  showLabel = true
+}) => (
+  <div className="relative pt-1">
+    <div className="flex items-center justify-between">
+      {showLabel && (
+        <div>
+          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+            {label}
+          </span>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
-        >
-          Retry
-        </button>
-      </Card>
-    );
-  }
+      )}
+      <div className="text-right">
+        <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+          {percentage.toFixed(1)}%
+        </span>
+      </div>
+    </div>
+    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+      <div
+        style={{ width: `${percentage}%` }}
+        className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${color}`}
+        role="progressbar"
+        aria-valuenow={percentage}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label}: ${percentage.toFixed(1)}%`}
+      />
+    </div>
+  </div>
+);
 
-  if (isLoading || !progress) {
-    return (
-      <Card className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
-          <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
-            <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  // Ensure numeric values
-  const progressPercentage = typeof progress.progress_percentage === 'number' ? progress.progress_percentage : 0;
-  const totalItems = typeof progress.total_items === 'number' ? progress.total_items : 0;
-  const masteredItems = typeof progress.mastered_items === 'number' ? progress.mastered_items : 0;
-  const studiedItems = typeof progress.studied_items === 'number' ? progress.studied_items : 0;
-  const inProgressItems = studiedItems - masteredItems;
+export const DashboardProgress: React.FC<DashboardProgressProps> = ({ progress, className = '' }) => {
+  const studiedPercentage = (progress.studied_items / progress.total_items) * 100 || 0;
+  const masteredPercentage = (progress.mastered_items / progress.total_items) * 100 || 0;
 
   return (
     <Card className={`p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-6">
-        <div className="space-y-1">
-          <h2 
-            className="text-lg font-medium text-gray-900 dark:text-gray-50"
-            id="progress-section-title"
-          >
-            Learning Progress
-          </h2>
-          <p 
-            className="text-sm text-gray-500 dark:text-gray-400"
-            id="progress-section-description"
-          >
-            Track your learning journey
-          </p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <CacheStatus
-            isCacheHit={isCacheHit}
-            timestamp={cacheStatus?.timestamp}
-            expires={cacheStatus?.expires}
+      <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        Learning Progress
+      </h2>
+      
+      <div className="space-y-6">
+        <div>
+          <ProgressBar
+            label="Overall Progress"
+            percentage={progress.progress_percentage}
+            color="bg-primary-600"
           />
-          <button
-            onClick={() => refetch()}
-            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            aria-label="Refresh progress"
-          >
-            Refresh
-          </button>
         </div>
-      </div>
+        
+        <div>
+          <ProgressBar
+            label="Items Studied"
+            percentage={studiedPercentage}
+            color="bg-blue-500"
+          />
+        </div>
+        
+        <div>
+          <ProgressBar
+            label="Items Mastered"
+            percentage={masteredPercentage}
+            color="bg-green-500"
+          />
+        </div>
 
-      <div 
-        ref={containerRef}
-        className="space-y-6"
-        role="region"
-        aria-labelledby="progress-section-title"
-        aria-describedby="progress-section-description"
-        tabIndex={0}
-      >
-        <ProgressBar
-          percentage={progressPercentage}
-          label="Total Progress"
-          color="var(--color-primary-600)"
-        />
-
-        <div 
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          role="list"
-          aria-label="Progress Details"
-        >
-          <div 
-            className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4"
-            role="listitem"
-          >
-            <h3 
-              className="text-sm font-medium text-gray-700 dark:text-gray-200"
-              id="mastered-items-label"
-            >
-              Items Mastered
-            </h3>
-            <p 
-              className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100"
-              aria-labelledby="mastered-items-label"
-            >
-              {masteredItems}
-              <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
-                / {totalItems}
-              </span>
-            </p>
+        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {progress.total_items}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Total Items
+            </div>
           </div>
-
-          <div 
-            className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4"
-            role="listitem"
-          >
-            <h3 
-              className="text-sm font-medium text-gray-700 dark:text-gray-200"
-              id="in-progress-items-label"
-            >
-              Items in Progress
-            </h3>
-            <p 
-              className="mt-2 text-3xl font-bold text-gray-900 dark:text-gray-100"
-              aria-labelledby="in-progress-items-label"
-            >
-              {inProgressItems}
-              <span className="text-sm font-normal text-gray-700 dark:text-gray-200 ml-2">
-                items
-              </span>
-            </p>
+          <div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {progress.studied_items}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Studied
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {progress.mastered_items}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Mastered
+            </div>
           </div>
         </div>
       </div>

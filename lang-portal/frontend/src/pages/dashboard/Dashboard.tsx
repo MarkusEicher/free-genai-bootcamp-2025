@@ -84,15 +84,22 @@ export default function Dashboard() {
     }
   });
 
-  // Listen for session completion events
+  // Prevent excessive refetching by using a debounced refresh
   useEffect(() => {
-    const handleSessionEvent = () => {
-      handleSessionComplete();
+    let timeoutId: NodeJS.Timeout;
+    const debouncedRefresh = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        refetch();
+      }, 5000); // Wait 5 seconds before allowing another refresh
     };
 
-    window.addEventListener('session:complete', handleSessionEvent);
-    return () => window.removeEventListener('session:complete', handleSessionEvent);
-  }, [handleSessionComplete]);
+    window.addEventListener('session:complete', debouncedRefresh);
+    return () => {
+      window.removeEventListener('session:complete', debouncedRefresh);
+      clearTimeout(timeoutId);
+    };
+  }, [refetch]);
 
   if (isLoading) {
     return (
@@ -109,36 +116,51 @@ export default function Dashboard() {
     );
   }
 
-  return (
-    <main 
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-      aria-busy={isLoading}
-      onKeyDown={handleKeyDown}
-    >
-      <SkipLink targetId="dashboard-content">
-        Skip to dashboard content
-      </SkipLink>
+  if (isError || !data) {
+    return (
+      <div className="p-4">
+        <ApiErrorBoundary error={error}>
+          <div className="text-center">
+            <button
+              onClick={() => refetch()}
+              className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700"
+            >
+              Retry Loading Dashboard
+            </button>
+          </div>
+        </ApiErrorBoundary>
+      </div>
+    );
+  }
 
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-50" tabIndex={-1}>
-          Learning Dashboard
-        </h1>
+  return (
+    <div className="p-4 space-y-6" onKeyDown={handleKeyDown} role="main">
+      <SkipLink />
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         <button
-          onClick={() => refreshAll()}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-          aria-label="Refresh all dashboard data"
+          onClick={() => refetch()}
+          className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          aria-label="Refresh dashboard"
         >
-          <RefreshIcon className="h-5 w-5" />
-          <span>Refresh All</span>
+          <RefreshIcon className="w-5 h-5" />
         </button>
       </div>
-
-      <DashboardContent 
-        data={data}
-        isError={isError}
-        error={error}
-        refetch={refetch}
+      
+      <DashboardStats 
+        stats={data.stats}
+        className={currentSection === 'stats' ? 'ring-2 ring-primary-500' : ''}
       />
-    </main>
+      
+      <DashboardProgress 
+        progress={data.progress}
+        className={currentSection === 'progress' ? 'ring-2 ring-primary-500' : ''}
+      />
+      
+      <DashboardLatestSessions 
+        sessions={data.latestSessions}
+        className={currentSection === 'sessions' ? 'ring-2 ring-primary-500' : ''}
+      />
+    </div>
   );
 } 
