@@ -22,6 +22,8 @@ class Logger {
   private logQueue: LogEntry[] = [];
   private flushInterval: number = 5000; // 5 seconds
   private isFlushingQueue = false;
+  private maxRetries = 3;
+  private retryDelay = 1000; // 1 second
 
   private constructor() {
     // Start periodic flush
@@ -43,7 +45,7 @@ class Logger {
     return Logger.instance;
   }
 
-  private async flushQueue(isUnloading = false): Promise<void> {
+  private async flushQueue(isUnloading = false, retryCount = 0): Promise<void> {
     if (this.logQueue.length === 0 || this.isFlushingQueue) {
       return;
     }
@@ -55,7 +57,7 @@ class Logger {
     try {
       const keepaliveOptions = isUnloading ? { keepalive: true } : {};
       
-      await fetch(API_ENDPOINTS.LOGS.STORE, {
+      const response = await fetch(API_ENDPOINTS.LOGS.STORE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,14 +66,30 @@ class Logger {
         ...keepaliveOptions
       });
 
+      if (!response.ok) {
+        throw new Error(`Failed to send logs: ${response.status} ${response.statusText}`);
+      }
+
       if (process.env.NODE_ENV === 'development') {
         console.log(`Flushed ${logsToSend.length} logs to server`);
       }
     } catch (error) {
-      // On error, add logs back to queue if not unloading
+      // On error, add logs back to queue if not unloading and retry if possible
       if (!isUnloading) {
         this.logQueue = [...logsToSend, ...this.logQueue].slice(0, this.maxQueueSize);
-        console.error('Failed to flush logs:', error);
+        
+        if (retryCount < this.maxRetries) {
+          console.warn(`Failed to flush logs (attempt ${retryCount + 1}/${this.maxRetries}):`, error);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+          
+          // Retry with exponential backoff
+          this.isFlushingQueue = false;
+          return this.flushQueue(isUnloading, retryCount + 1);
+        } else {
+          console.error('Failed to flush logs after max retries:', error);
+        }
       }
     } finally {
       this.isFlushingQueue = false;
@@ -79,6 +97,20 @@ class Logger {
   }
 
   private addToQueue(entry: LogEntry): void {
+    // Add timestamp if not present
+    if (!entry.timestamp) {
+      entry.timestamp = new Date().toISOString();
+    }
+
+    // Format error object for transmission
+    if (entry.error instanceof Error) {
+      entry.error = {
+        name: entry.error.name,
+        message: entry.error.message,
+        stack: entry.error.stack
+      } as any;
+    }
+
     this.logQueue.push(entry);
     
     // Log to console in development

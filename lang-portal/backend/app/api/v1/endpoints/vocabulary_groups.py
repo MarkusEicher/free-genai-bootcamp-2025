@@ -12,7 +12,6 @@ from app.schemas.vocabulary_group import (
     VocabularyGroupDetail,
     PracticeItem
 )
-from app.core.cache import cache_response
 
 router = APIRouter()
 
@@ -173,7 +172,6 @@ def get_vocabulary_group(
         }
     }
 )
-@cache_response(prefix="vocabulary_group:practice", expire=300)
 def get_practice_items(
     group_id: int,
     reverse: bool = False,

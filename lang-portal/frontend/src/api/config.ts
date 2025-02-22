@@ -22,11 +22,6 @@ export class ApiError extends Error {
 
 export interface ApiResponse<T> {
   data: T;
-  cacheInfo?: {
-    hit: boolean;
-    timestamp: number;
-    expires: number;
-  };
 }
 
 interface ValidationError {
@@ -36,22 +31,6 @@ interface ValidationError {
   ctx?: {
     received?: any;
     expected?: any;
-  };
-}
-
-/**
- * Parse cache headers from response
- */
-function parseCacheHeaders(headers: Headers): ApiResponse<any>['cacheInfo'] {
-  const cacheStatus = headers.get('X-Cache-Status');
-  const cacheExpires = headers.get('X-Cache-Expires');
-
-  if (!cacheStatus) return undefined;
-
-  return {
-    hit: cacheStatus === 'HIT',
-    timestamp: Date.now(),
-    expires: cacheExpires ? parseInt(cacheExpires, 10) : Date.now() + 300000 // 5 minutes default
   };
 }
 
@@ -95,9 +74,6 @@ export async function fetchApi<T>(
         ...options.headers,
       },
     });
-
-    // Parse cache headers
-    const cacheInfo = parseCacheHeaders(response.headers);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
@@ -148,7 +124,7 @@ export async function fetchApi<T>(
     }
 
     const data = await response.json();
-    return { data, cacheInfo };
+    return { data };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;

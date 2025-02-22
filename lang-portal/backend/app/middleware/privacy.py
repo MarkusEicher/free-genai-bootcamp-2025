@@ -15,11 +15,22 @@ class PrivacyMiddleware(BaseHTTPMiddleware):
             "token", "key", "password", "secret", "auth",
             "session", "tracking", "analytics", "location"
         ]
+        # Define documentation endpoints
+        self.doc_endpoints = {"/docs", "/redoc", "/openapi.json"}
+        self.doc_static_pattern = re.compile(r"^/static/(swagger-ui|redoc)/.*$")
+    
+    def _is_doc_endpoint(self, path: str) -> bool:
+        """Check if the path is a documentation endpoint."""
+        return path in self.doc_endpoints or bool(self.doc_static_pattern.match(path))
     
     async def dispatch(
         self, request: Request, call_next: Callable
     ) -> Response:
         """Process the request and enforce privacy requirements."""
+        # Skip processing for documentation endpoints
+        if self._is_doc_endpoint(request.url.path):
+            return await call_next(request)
+            
         # Block any external requests
         if not self._is_local_request(request):
             return Response(
@@ -39,39 +50,27 @@ class PrivacyMiddleware(BaseHTTPMiddleware):
         # Process the request
         response = await call_next(request)
         
+        # Preserve CORS headers if they exist
+        cors_headers = {
+            k: v for k, v in response.headers.items()
+            if k.lower().startswith("access-control-")
+        }
+        
         # Add privacy headers
         response.headers["X-Privacy-Mode"] = "strict"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Use only standardized Permissions-Policy directives
         response.headers["Permissions-Policy"] = (
-            "accelerometer=(), "
-            "ambient-light-sensor=(), "
-            "autoplay=(), "
-            "battery=(), "
             "camera=(), "
-            "display-capture=(), "
-            "document-domain=(), "
-            "encrypted-media=(), "
-            "execution-while-not-rendered=(), "
-            "execution-while-out-of-viewport=(), "
-            "fullscreen=(), "
-            "geolocation=(), "
-            "gyroscope=(), "
-            "interest-cohort=(), "
-            "magnetometer=(), "
             "microphone=(), "
-            "midi=(), "
-            "navigation-override=(), "
+            "geolocation=(), "
             "payment=(), "
-            "picture-in-picture=(), "
-            "publickey-credentials-get=(), "
-            "screen-wake-lock=(), "
-            "sync-xhr=(), "
             "usb=(), "
-            "web-share=(), "
-            "xr-spatial-tracking=()"
+            "interest-cohort=()"
         )
         
         # Remove any potential tracking or analytics headers
@@ -83,21 +82,19 @@ class PrivacyMiddleware(BaseHTTPMiddleware):
             "X-Real-IP",
             "X-Forwarded-For",
             "X-Forwarded-Proto",
-            "X-Forwarded-Host",
-            "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Methods",
-            "Access-Control-Allow-Headers",
-            "Access-Control-Allow-Credentials",
-            "Access-Control-Expose-Headers"
+            "X-Forwarded-Host"
         ]
         
         for header in headers_to_remove:
             if header in response.headers:
                 del response.headers[header]
         
+        # Restore CORS headers
+        response.headers.update(cors_headers)
+        
         # Ensure no sensitive data in response headers
         for header, value in response.headers.items():
-            if self._contains_sensitive_data(value):
+            if not header.lower().startswith("access-control-") and self._contains_sensitive_data(value):
                 response.headers[header] = "[REDACTED]"
         
         return response
@@ -105,7 +102,11 @@ class PrivacyMiddleware(BaseHTTPMiddleware):
     def _is_local_request(self, request: Request) -> bool:
         """Check if the request is from localhost."""
         host = request.client.host if request.client else None
-        return host in ["127.0.0.1", "localhost", "::1"]
+        origin = request.headers.get("Origin", "")
+        return (
+            host in ["127.0.0.1", "localhost", "::1"] or
+            origin.startswith(("http://localhost:", "http://127.0.0.1:"))
+        )
     
     def _filter_sensitive_params(self, params: dict) -> dict:
         """Remove any sensitive parameters from the query string."""
@@ -122,4 +123,4 @@ class PrivacyMiddleware(BaseHTTPMiddleware):
             r"eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*",  # JWT-like tokens
             r"[a-zA-Z0-9+/]{32,}={0,2}"  # Base64-like strings
         ]
-        return any(re.search(pattern, str(value)) for pattern in sensitive_patterns) 
+        return any(re.search(pattern, str(value)) for pattern in sensitive_patterns)

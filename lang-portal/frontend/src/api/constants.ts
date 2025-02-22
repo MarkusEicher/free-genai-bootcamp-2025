@@ -4,12 +4,13 @@
  */
 
 export const API_VERSION = 'v1';
-export const BASE_URL = `/api/${API_VERSION}`;
+export const API_HOST = 'http://localhost:8000';
+export const BASE_URL = `${API_HOST}/api/${API_VERSION}`;
 
 export const API_ENDPOINTS = {
   LOGS: {
     /** Store frontend logs */
-    STORE: `${BASE_URL}/logs`,
+    STORE: `${BASE_URL}/logs/logs`,
     /** View logs */
     VIEW: `${BASE_URL}/logs/view`
   },
@@ -50,4 +51,4 @@ export const API_ENDPOINTS = {
 } as const;
 
 // Type for API endpoints to ensure type safety when using endpoints
-export type ApiEndpoints = typeof API_ENDPOINTS; 
+export type ApiEndpoints = typeof API_ENDPOINTS;

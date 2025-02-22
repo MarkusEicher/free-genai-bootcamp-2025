@@ -19,61 +19,31 @@ from app.schemas.activity import (
 )
 from app.services.base import BaseService
 from app.core.config import settings
-from app.core.cache import cache
 
 class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
     def __init__(self):
         super().__init__(Activity)
         self.data_dir = os.path.join(settings.BACKEND_DIR, "data", "activities")
         os.makedirs(self.data_dir, exist_ok=True)
-        self._cache = cache
 
-    def get_with_cache(self, db: Session, *, id: int) -> Optional[Activity]:
-        """Get activity with cache support."""
-        # Try cache first
-        cached_data = self._cache.get_activity(id)
-        if cached_data:
-            return Activity(**cached_data)
-        
-        # Get from database
-        db_obj = super().get(db, id=id)
-        if db_obj:
-            # Cache the result
-            activity_data = db_obj.to_dict(include_private=False)
-            self._cache.cache_activity(id, activity_data)
-        
-        return db_obj
+    def get(self, db: Session, *, id: int) -> Optional[Activity]:
+        """Get activity by ID."""
+        return super().get(db, id=id)
 
     def create_with_validation(self, db: Session, *, obj_in: ActivityCreate) -> Activity:
-        """Create activity with validation and cache."""
-        db_obj = super().create_with_validation(db, obj_in=obj_in)
-        
-        # Cache the new activity
-        activity_data = db_obj.to_dict(include_private=False)
-        self._cache.cache_activity(db_obj.id, activity_data)
-        
-        return db_obj
+        """Create activity with validation."""
+        return super().create_with_validation(db, obj_in=obj_in)
 
     def update(self, db: Session, *, db_obj: Activity, obj_in: ActivityUpdate) -> Activity:
-        """Update activity and invalidate cache."""
-        db_obj = super().update(db, db_obj=db_obj, obj_in=obj_in)
-        
-        # Invalidate cache
-        self._cache.invalidate_activity(db_obj.id)
-        
-        return db_obj
+        """Update activity."""
+        return super().update(db, db_obj=db_obj, obj_in=obj_in)
 
     def delete(self, db: Session, *, id: int) -> Activity:
-        """Delete activity and remove from cache."""
-        db_obj = super().delete(db, id=id)
-        
-        # Remove from cache
-        self._cache.invalidate_activity(id)
-        
-        return db_obj
+        """Delete activity."""
+        return super().delete(db, id=id)
 
     def cleanup_expired_activities(self, db: Session) -> int:
-        """Clean up expired activities and their cache."""
+        """Clean up expired activities."""
         count = 0
         current_time = datetime.now()
         
@@ -88,10 +58,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                 try:
                     activity.cleanup_local_data()
                 except Exception as e:
-                    logger.error(f"Failed to clean local data for activity {activity.id}: {e}")
-            
-            # Remove from cache
-            self._cache.invalidate_activity(activity.id)
+                    print(f"Failed to clean local data for activity {activity.id}: {e}")
             
             # Delete from database
             db.delete(activity)
@@ -100,7 +67,7 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
         try:
             db.commit()
         except Exception as e:
-            logger.error(f"Failed to commit activity cleanup: {e}")
+            print(f"Failed to commit activity cleanup: {e}")
             db.rollback()
             return 0
         
@@ -214,6 +181,9 @@ class ActivityService(BaseService[Activity, ActivityCreate, ActivityUpdate]):
                     return True
         return False
 
+# Create service instance
+activity_service = ActivityService()
+
 # Keep SessionService unchanged as it works with vocabulary IDs directly
 class SessionService(BaseService[ActivitySession, SessionCreate, SessionCreate]):
     def __init__(self):
@@ -249,43 +219,5 @@ class SessionService(BaseService[ActivitySession, SessionCreate, SessionCreate])
             return []  # Return empty list for non-existent activity
         return self.get_multi(db, skip=skip, limit=limit, activity_id=activity_id)
 
-    def record_attempt(
-        self,
-        db: Session,
-        *,
-        session_id: int,
-        vocabulary_id: int,
-        is_correct: bool,
-        response_time_ms: Optional[int] = None
-    ) -> SessionAttempt:
-        """Record an attempt in a session."""
-        # Verify session exists
-        session = db.query(ActivitySession).filter(ActivitySession.id == session_id).first()
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        # Verify vocabulary belongs to one of the activity's groups
-        vocabulary_ids = []
-        for group in session.activity.vocabulary_groups:
-            vocabulary_ids.extend([v.id for v in group.vocabularies])
-        
-        if vocabulary_id not in vocabulary_ids:
-            raise HTTPException(
-                status_code=400,
-                detail={"code": "INVALID_VOCABULARY", "message": "Vocabulary does not belong to activity's groups"}
-            )
-
-        attempt = SessionAttempt(
-            session_id=session_id,
-            vocabulary_id=vocabulary_id,
-            is_correct=is_correct,
-            response_time_ms=response_time_ms
-        )
-        db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
-        return attempt
-
-# Create service instances
-activity_service = ActivityService()
+# Create session service instance
 session_service = SessionService()

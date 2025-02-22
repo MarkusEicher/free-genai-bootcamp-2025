@@ -23,7 +23,7 @@ class LogBatch(BaseModel):
     """Batch of frontend logs."""
     logs: List[LogEntry]
 
-@router.post("/logs", summary="Store frontend logs")
+@router.post("/logs/logs", summary="Store frontend logs")
 async def store_logs(log_batch: LogBatch, request: Request):
     """Store logs from frontend."""
     client_ip = request.client.host

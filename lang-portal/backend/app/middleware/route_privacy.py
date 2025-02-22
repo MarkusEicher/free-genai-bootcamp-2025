@@ -11,6 +11,10 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
     
     def __init__(self, app: ASGIApp):
         super().__init__(app)
+        # Define documentation endpoints
+        self.doc_endpoints = {"/docs", "/redoc", "/openapi.json"}
+        self.doc_static_pattern = re.compile(r"^/static/(swagger-ui|redoc)/.*$")
+        
         # Define route patterns and their privacy rules
         self.route_rules: Dict[str, Set[str]] = {
             r"/api/v1/dashboard/.*": {
@@ -45,6 +49,10 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
             (r'"session_id":\s*"[^"]*"', '"session_id": "[REDACTED]"'),
             (r'"token":\s*"[^"]*"', '"token": "[REDACTED]"')
         ]
+    
+    def _is_doc_endpoint(self, path: str) -> bool:
+        """Check if the path is a documentation endpoint."""
+        return path in self.doc_endpoints or bool(self.doc_static_pattern.match(path))
     
     def _get_route_rules(self, path: str) -> Dict[str, any]:
         """Get privacy rules for a specific route."""
@@ -91,32 +99,12 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
-            "accelerometer=(), "
-            "ambient-light-sensor=(), "
-            "autoplay=(), "
-            "battery=(), "
             "camera=(), "
-            "display-capture=(), "
-            "document-domain=(), "
-            "encrypted-media=(), "
-            "execution-while-not-rendered=(), "
-            "execution-while-out-of-viewport=(), "
-            "fullscreen=(), "
-            "geolocation=(), "
-            "gyroscope=(), "
-            "interest-cohort=(), "
-            "magnetometer=(), "
             "microphone=(), "
-            "midi=(), "
-            "navigation-override=(), "
+            "geolocation=(), "
             "payment=(), "
-            "picture-in-picture=(), "
-            "publickey-credentials-get=(), "
-            "screen-wake-lock=(), "
-            "sync-xhr=(), "
             "usb=(), "
-            "web-share=(), "
-            "xr-spatial-tracking=()"
+            "interest-cohort=()"
         )
         
         # Add development mode headers
@@ -130,6 +118,14 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable
     ) -> Response:
         """Process the request with route-specific privacy rules."""
+        # Skip processing for documentation endpoints
+        if self._is_doc_endpoint(request.url.path):
+            response = await call_next(request)
+            # For documentation endpoints, only add minimal headers
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            return response
+            
         # Handle OPTIONS requests
         if request.method == "OPTIONS":
             return await self._handle_options_request(request)
@@ -157,11 +153,10 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
         # Add privacy headers
         self._add_privacy_headers(response, rules)
         
-        # Skip sanitization for non-JSON or compressed responses
+        # Skip sanitization for non-JSON responses or if sanitization is disabled
         if not (
             rules["sanitize_response"] and
-            response.headers.get("content-type", "").startswith("application/json") and
-            not response.headers.get("content-encoding")
+            response.headers.get("content-type", "").startswith("application/json")
         ):
             return response
 
@@ -175,35 +170,20 @@ class RoutePrivacyMiddleware(BaseHTTPMiddleware):
             try:
                 response_text = body.decode('utf-8')
                 sanitized_body = self._sanitize_response_data(response_text)
-                body = sanitized_body.encode('utf-8')
+                
+                # Create new response without manipulating content-length
+                return Response(
+                    content=sanitized_body,
+                    status_code=response.status_code,
+                    media_type=response.media_type
+                )
             except UnicodeDecodeError:
-                # Not UTF-8 encoded, return original response
+                # Not UTF-8 encoded, return as is
                 return Response(
                     content=body,
                     status_code=response.status_code,
-                    headers=dict(response.headers),
                     media_type=response.media_type
                 )
-
-            # Create new response with sanitized body
-            headers = dict(response.headers)
-            
-            # Ensure we have exactly one valid Content-Length header
-            headers.pop("content-length", None)  # Remove any existing Content-Length headers
-            headers.pop("Content-Length", None)  # Remove any capitalized variants
-            content_length = str(len(body))  # Calculate new content length
-            headers["content-length"] = content_length  # Set single, valid Content-Length header
-            
-            # Remove any transfer-encoding headers as we're using content-length
-            headers.pop("transfer-encoding", None)
-            headers.pop("Transfer-Encoding", None)
-            
-            return Response(
-                content=body,
-                status_code=response.status_code,
-                headers=headers,
-                media_type=response.media_type
-            )
         except Exception:
             # If anything goes wrong, return original response
             return response

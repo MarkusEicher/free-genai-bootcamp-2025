@@ -4,8 +4,8 @@ import { queryClient } from './hooks/useApi'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { StatsProvider } from './contexts/StatsContext'
-import { CacheProvider } from './contexts/CacheContext'
-import Router from './Router'
+import { RouterProvider } from 'react-router-dom'
+import router from './Router'
 
 export default function App() {
   return (
@@ -14,9 +14,7 @@ export default function App() {
         <ThemeProvider>
           <NotificationProvider>
             <StatsProvider>
-              <CacheProvider>
-                <Router />
-              </CacheProvider>
+              <RouterProvider router={router} />
             </StatsProvider>
           </NotificationProvider>
         </ThemeProvider>
