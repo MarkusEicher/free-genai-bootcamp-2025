@@ -7,6 +7,12 @@ export const API_VERSION = 'v1';
 export const BASE_URL = `/api/${API_VERSION}`;
 
 export const API_ENDPOINTS = {
+  LOGS: {
+    /** Store frontend logs */
+    STORE: `${BASE_URL}/logs`,
+    /** View logs */
+    VIEW: `${BASE_URL}/logs/view`
+  },
   DASHBOARD: {
     /** Get overall dashboard statistics */
     STATS: `${BASE_URL}/dashboard/stats`,

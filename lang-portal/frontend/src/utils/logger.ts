@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from '../api/constants';
+
 export enum LogLevel {
   DEBUG = 'DEBUG',
   INFO = 'INFO',
@@ -7,7 +9,7 @@ export enum LogLevel {
 
 interface LogEntry {
   timestamp: string;
-  level: LogLevel;
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
   component: string;
   message: string;
   details?: Record<string, unknown>;
@@ -29,6 +31,9 @@ class Logger {
     window.addEventListener('beforeunload', () => {
       this.flushQueue(true);
     });
+
+    // Log initialization
+    this.info('Logger', 'Frontend logger initialized');
   }
 
   public static getInstance(): Logger {
@@ -38,35 +43,35 @@ class Logger {
     return Logger.instance;
   }
 
-  private async flushQueue(immediate = false): Promise<void> {
-    if (this.isFlushingQueue || this.logQueue.length === 0) return;
+  private async flushQueue(isUnloading = false): Promise<void> {
+    if (this.logQueue.length === 0 || this.isFlushingQueue) {
+      return;
+    }
 
     this.isFlushingQueue = true;
     const logsToSend = [...this.logQueue];
     this.logQueue = [];
 
     try {
-      if (immediate) {
-        // Use synchronous fetch for immediate flush
-        await fetch('/api/v1/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ logs: logsToSend }),
-        });
-      } else {
-        // Normal async flush - use direct path to avoid double prefix
-        await fetch('/api/v1/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ logs: logsToSend })
-        });
+      const keepaliveOptions = isUnloading ? { keepalive: true } : {};
+      
+      await fetch(API_ENDPOINTS.LOGS.STORE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ logs: logsToSend }),
+        ...keepaliveOptions
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Flushed ${logsToSend.length} logs to server`);
       }
     } catch (error) {
-      console.error('Failed to flush logs:', error);
-      // On error, add logs back to queue if space allows
-      const totalSize = this.logQueue.length + logsToSend.length;
-      if (totalSize <= this.maxQueueSize) {
-        this.logQueue = [...logsToSend, ...this.logQueue];
+      // On error, add logs back to queue if not unloading
+      if (!isUnloading) {
+        this.logQueue = [...logsToSend, ...this.logQueue].slice(0, this.maxQueueSize);
+        console.error('Failed to flush logs:', error);
       }
     } finally {
       this.isFlushingQueue = false;
@@ -74,57 +79,58 @@ class Logger {
   }
 
   private addToQueue(entry: LogEntry): void {
-    // Add timestamp if not present
-    if (!entry.timestamp) {
-      entry.timestamp = new Date().toISOString();
-    }
-
-    // Log to console
-    const consoleMsg = `[${entry.component}] ${entry.message}`;
-    switch (entry.level) {
-      case LogLevel.DEBUG:
-        console.debug(consoleMsg, entry.details || '');
-        break;
-      case LogLevel.INFO:
-        console.info(consoleMsg, entry.details || '');
-        break;
-      case LogLevel.WARN:
-        console.warn(consoleMsg, entry.details || '');
-        break;
-      case LogLevel.ERROR:
-        console.error(consoleMsg, entry.error || entry.details || '');
-        break;
-    }
-
-    // Add to queue
     this.logQueue.push(entry);
+    
+    // Log to console in development
+    if (process.env.NODE_ENV === 'development') {
+      const { level, component, message, details, error } = entry;
+      const consoleMethod = level.toLowerCase() as keyof Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
+      console[consoleMethod](`[${component}] ${message}`, details || '', error || '');
+    }
 
-    // Flush if queue is full
     if (this.logQueue.length >= this.maxQueueSize) {
       this.flushQueue();
     }
   }
 
   public debug(component: string, message: string, details?: Record<string, unknown>): void {
-    this.addToQueue({ level: LogLevel.DEBUG, component, message, details, timestamp: new Date().toISOString() });
+    this.addToQueue({
+      timestamp: new Date().toISOString(),
+      level: 'DEBUG',
+      component,
+      message,
+      details
+    });
   }
 
   public info(component: string, message: string, details?: Record<string, unknown>): void {
-    this.addToQueue({ level: LogLevel.INFO, component, message, details, timestamp: new Date().toISOString() });
+    this.addToQueue({
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      component,
+      message,
+      details
+    });
   }
 
   public warn(component: string, message: string, details?: Record<string, unknown>): void {
-    this.addToQueue({ level: LogLevel.WARN, component, message, details, timestamp: new Date().toISOString() });
+    this.addToQueue({
+      timestamp: new Date().toISOString(),
+      level: 'WARN',
+      component,
+      message,
+      details
+    });
   }
 
   public error(component: string, message: string, error?: Error, details?: Record<string, unknown>): void {
     this.addToQueue({
-      level: LogLevel.ERROR,
+      timestamp: new Date().toISOString(),
+      level: 'ERROR',
       component,
       message,
       error,
-      details,
-      timestamp: new Date().toISOString()
+      details
     });
   }
 
@@ -170,4 +176,7 @@ class Logger {
   }
 }
 
+export { Logger, type LogEntry };
+
+// Export singleton instance
 export const logger = Logger.getInstance();
