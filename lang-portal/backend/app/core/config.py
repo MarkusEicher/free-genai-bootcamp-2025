@@ -1,13 +1,17 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic_settings import BaseSettings
+from pathlib import Path
 import os
 
-class Settings(BaseModel):
-    # Get the backend directory path
-    BACKEND_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "Language Learning Portal"
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+    
+    # Backend directory configuration
+    BACKEND_DIR: Path = Path(__file__).parent.parent.parent
     
     # Development mode
-    DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() == "true"
+    DEV_MODE: bool = True
     
     # Database URLs with explicit paths in backend directory
     DATABASE_URL: str = f"sqlite:///{BACKEND_DIR}/data/app.db"
@@ -20,7 +24,7 @@ class Settings(BaseModel):
     DB_POOL_TIMEOUT: int = 30
     
     # Cache configuration
-    CACHE_DIR: str = os.path.join(BACKEND_DIR, "data", "cache")
+    CACHE_DIR: str = str(BACKEND_DIR / "data" / "cache")
     CACHE_DEFAULT_EXPIRE: int = 300  # 5 minutes
     MAX_CACHE_SIZE: int = 50 * 1024 * 1024  # 50MB
     MAX_ENTRY_SIZE: int = 1 * 1024 * 1024   # 1MB
@@ -29,12 +33,17 @@ class Settings(BaseModel):
     CACHE_METRICS_WINDOW: int = 1000  # Number of response times to keep
     
     # Privacy settings
-    COLLECT_METRICS: bool = False
-    ENABLE_LOGGING: bool = False
-    LOG_LEVEL: str = "ERROR"  # Only log errors by default
+    COLLECT_METRICS: bool = True  # Enable metrics for logging
+    ENABLE_LOGGING: bool = True   # Enable logging system
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    LOG_DATE_FORMAT: str = "%Y-%m-%d %H:%M:%S"
     
     # Test configuration
     TEST_DB_ECHO: bool = False  # Disable SQL logging in tests
     KEEP_TEST_DB: bool = False  # Don't keep test DB by default
+    
+    class Config:
+        case_sensitive = True
 
 settings = Settings()

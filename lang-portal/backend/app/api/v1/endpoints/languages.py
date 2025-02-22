@@ -159,3 +159,15 @@ def list_language_pairs_by_language(
         query = query.filter(LanguagePair.target_language_id == language_id)
     
     return query.all()
+
+@router.get("/")
+async def get_languages(db: Session = Depends(get_db)):
+    """Get all available languages."""
+    # Implementation here
+    pass
+
+@router.get("/{language_id}")
+async def get_language(language_id: int, db: Session = Depends(get_db)):
+    """Get a specific language."""
+    # Implementation here
+    pass

@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from app.core.config import settings
 from app.core.tasks import schedule_cleanup_tasks
+from app.core.logging_config import log_api_request
+import time
 
 # Development mode flag
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
@@ -58,6 +60,26 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityMiddleware)
     app.add_middleware(RoutePrivacyMiddleware)
     
+    # CORS middleware configuration
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        """Log all API requests with timing information."""
+        start_time = time.time()
+        response = await call_next(request)
+        duration = (time.time() - start_time) * 1000  # Convert to milliseconds
+        
+        log_api_request(request, duration, response.status_code)
+        
+        return response
+
     # Include API router
     app.include_router(api_router, prefix="/api/v1")
     

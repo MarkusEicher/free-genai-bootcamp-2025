@@ -139,98 +139,86 @@ export const DashboardLatestSessions: React.FC<DashboardLatestSessionsProps> = (
     error,
     isCacheHit,
     cacheStatus,
+    retryCount,
     refetch
   } = useCacheableQuery<LatestSession[]>({
     cacheKey: 'dashboard-latest-sessions',
     queryFn: () => dashboardApi.getLatestSessions(5),
-    cacheDuration: 2 * 60 * 1000 // 2 minutes - shorter duration since this data changes frequently
+    cacheDuration: 5 * 60 * 1000, // Increase to 5 minutes to reduce requests
+    enabled: true, // Only fetch when component mounts
+    retryConfig: {
+      maxRetries: 1,          // Reduce retries to prevent excessive requests
+      initialDelay: 2000,     // Start with 2 second delay
+      maxDelay: 5000,         // Cap at 5 seconds
+      backoffFactor: 2        // Standard exponential backoff
+    },
+    onError: (error) => {
+      if (error instanceof Error) {
+        console.error('Failed to fetch latest sessions:', error.message);
+      }
+    }
   });
 
   if (error) {
     return (
-      <Card className="p-6 bg-red-50 dark:bg-red-900/10">
-        <div className="text-red-800 dark:text-red-200">
-          Failed to load latest sessions
-        </div>
-        <button
-          onClick={() => refetch()}
-          className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
-        >
-          Retry
-        </button>
-      </Card>
-    );
-  }
-
-  if (isLoading || !sessions) {
-    return (
-      <Card className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="space-y-3">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-full" />
-            </div>
-          ))}
+      <Card className={className}>
+        <div className="p-4">
+          <h3 className="text-lg font-semibold mb-2">Latest Sessions</h3>
+          <div className="text-red-600 dark:text-red-400">
+            <p>Failed to load latest sessions.</p>
+            {retryCount > 0 && (
+              <p className="text-sm mt-1">
+                Retry attempt {retryCount} of 2
+              </p>
+            )}
+            <button
+              onClick={() => refetch()}
+              className="mt-2 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       </Card>
     );
   }
 
-  if (!Array.isArray(sessions) || sessions.length === 0) {
+  if (isLoading) {
     return (
-      <Card className="p-6">
-        <div 
-          className="text-center text-gray-700 dark:text-gray-300"
-          role="status"
-          aria-live="polite"
-        >
-          No recent sessions found
+      <Card className={className}>
+        <div className="p-4">
+          <h3 className="text-lg font-semibold mb-4">Latest Sessions</h3>
+          <div className="animate-pulse space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded" />
+            ))}
+          </div>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className={`p-6 ${className}`}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 
-          className="text-lg font-semibold text-gray-900 dark:text-gray-50"
-          id="latest-sessions-title"
-        >
-          Latest Sessions
-        </h3>
-        <div className="flex items-center space-x-4">
-          <CacheStatus
-            isCacheHit={isCacheHit}
-            timestamp={cacheStatus?.timestamp}
-            expires={cacheStatus?.expires}
-          />
-          <button
-            onClick={() => refetch()}
-            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-            aria-label="Refresh latest sessions"
-          >
-            Refresh
-          </button>
+    <Card className={className}>
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Latest Sessions</h3>
+          <CacheStatus isHit={isCacheHit} status={cacheStatus} />
         </div>
-      </div>
-
-      <div 
-        ref={containerRef}
-        className="space-y-4"
-        role="feed"
-        aria-labelledby="latest-sessions-title"
-      >
-        {sessions.map((session, index) => (
-          <SessionItem 
-            key={`${session.activity_name}-${session.start_time}-${index}`}
-            session={session}
-            index={index}
-          />
-        ))}
+        <div 
+          ref={containerRef}
+          className="space-y-4"
+          role="list"
+          aria-label="Latest learning sessions"
+        >
+          {sessions && sessions.length > 0 ? (
+            sessions.map((session, index) => (
+              <SessionItem key={`${session.start_time}-${index}`} session={session} index={index} />
+            ))
+          ) : (
+            <p className="text-gray-600 dark:text-gray-400">No recent sessions found.</p>
+          )}
+        </div>
       </div>
     </Card>
   );

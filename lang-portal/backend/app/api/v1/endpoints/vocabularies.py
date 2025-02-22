@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.models.vocabulary import Vocabulary, VocabularyCreate, VocabularyRead
+from app.models.vocabulary import Vocabulary
+from app.schemas.vocabulary import VocabularyCreate, VocabularyRead
 from app.models.language_pair import LanguagePair
-from app.database.database import get_db
+from app.db.database import get_db
 
 router = APIRouter()
 
