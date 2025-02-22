@@ -56,6 +56,16 @@ function parseCacheHeaders(headers: Headers): ApiResponse<any>['cacheInfo'] {
 }
 
 /**
+ * Filter out sensitive parameters from query params
+ */
+function filterSensitiveParams(params: Record<string, any>): Record<string, any> {
+  const sensitiveKeys = ['token', 'password', 'secret', 'key'];
+  return Object.fromEntries(
+    Object.entries(params).filter(([key]) => !sensitiveKeys.includes(key.toLowerCase()))
+  );
+}
+
+/**
  * Privacy-focused API fetch function
  * - Ensures local-only access
  * - No tracking or analytics
@@ -66,7 +76,9 @@ export async function fetchApi<T>(
   endpoint: string,
   options: FetchApiOptions = {}
 ): Promise<ApiResponse<T>> {
-  const url = new URL(`${BASE_URL}/${endpoint}`, window.location.origin);
+  // Check if the endpoint already starts with the base URL
+  const path = endpoint.startsWith(BASE_URL) ? endpoint : `${BASE_URL}/${endpoint.replace(/^\//, '')}`;
+  const url = new URL(path, window.location.origin);
   
   // Add query parameters if provided
   if (options.params) {
@@ -159,33 +171,6 @@ export async function fetchApi<T>(
       { error: error instanceof Error ? error.message : 'Unknown error' }
     );
   }
-}
-
-/**
- * Filter out sensitive or tracking-related parameters
- */
-function filterSensitiveParams(params: Record<string, any>): Record<string, any> {
-  const sensitiveKeys = [
-    'token',
-    'key',
-    'password',
-    'secret',
-    'auth',
-    'session',
-    'tracking',
-    'analytics',
-    'location',
-    'device',
-    'fingerprint',
-    'uid',
-    'uuid'
-  ];
-
-  return Object.fromEntries(
-    Object.entries(params).filter(([key]) => 
-      !sensitiveKeys.some(sensitive => key.toLowerCase().includes(sensitive))
-    )
-  );
 }
 
 // Add better error logging without sensitive data
